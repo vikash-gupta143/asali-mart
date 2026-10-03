@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /seller
+Disallow: /delivery
+Disallow: /checkout
+Disallow: /cart
+Disallow: /orders
+Disallow: /profile
+
+Sitemap: https://asalimart.com/sitemap.xml
