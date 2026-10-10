@@ -1,8 +1,15 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { FiArrowRight, FiTruck, FiShield, FiTag, FiHeadphones } from "react-icons/fi";
+import {
+  FiArrowRight, FiTruck, FiShield, FiTag, FiHeadphones,
+  FiCopy, FiCheck, FiMapPin,
+} from "react-icons/fi";
 import ProductCard from "../components/common/ProductCard";
 import { fetchProducts } from "../services/productService";
+import { fetchActiveCoupons } from "../services/couponService";
+import { fetchNearbyProducts } from "../services/shopService";
+import { useLocation } from "../context/LocationContext";
+
 
 const categories = [
   { id: 1, name: "Electronics", icon: "📱", color: "#E3F2FD" },
@@ -15,16 +22,47 @@ const categories = [
   { id: 8, name: "Books", icon: "📚", color: "#EDE7F6" },
 ];
 
+import DeliveryBanner from "../components/common/DeliveryBanner";
+
+// JSX me:
+<DeliveryBanner />
+
 const Home = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // 🌍 Location
+  const { location } = useLocation();
+
+  // 🎟️ Coupons
+  const [coupons, setCoupons] = useState([]);
+  const [copiedCode, setCopiedCode] = useState("");
+
+  // Load products — Nearby first, fallback to all
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
-        const data = await fetchProducts({ limit: 8 });
+        setError("");
+
+        let data;
+
+        if (location) {
+          // 🌍 Nearby products — 10 km
+          try {
+            data = await fetchNearbyProducts(location.lat, location.lng, 10, {
+              limit: 8,
+            });
+          } catch (nearbyErr) {
+            console.warn("Nearby failed, falling back to all products");
+            data = await fetchProducts({ limit: 8 });
+          }
+        } else {
+          // Location nahi — saare products
+          data = await fetchProducts({ limit: 8 });
+        }
+
         setProducts(data.products || []);
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load products");
@@ -33,7 +71,26 @@ const Home = () => {
       }
     };
     load();
+  }, [location]);
+
+  // Load coupons
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await fetchActiveCoupons();
+        setCoupons(data.coupons || []);
+      } catch (err) {
+        console.error("Coupons load error:", err.message);
+      }
+    };
+    load();
   }, []);
+
+  const handleCopyCoupon = (code) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(""), 2000);
+  };
 
   return (
     <div className="container-custom py-6 space-y-10">
@@ -48,7 +105,8 @@ const Home = () => {
             Shop from <br /> Nearby Shops
           </h1>
           <p className="text-white/90 mb-6 text-sm sm:text-base">
-            Get products delivered from your local shops in minutes. Bargain directly with sellers!
+            Get products delivered from your local shops in minutes. Bargain
+            directly with sellers!
           </p>
           <div className="flex flex-wrap gap-3">
             <Link
@@ -75,7 +133,10 @@ const Home = () => {
           { icon: FiTag, title: "Best Prices", desc: "Bargain directly" },
           { icon: FiHeadphones, title: "24/7 Support", desc: "Always here" },
         ].map((f, i) => (
-          <div key={i} className="bg-white rounded-xl p-4 shadow-card flex items-center gap-3">
+          <div
+            key={i}
+            className="bg-white rounded-xl p-4 shadow-card flex items-center gap-3"
+          >
             <div className="w-11 h-11 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-xl">
               <f.icon />
             </div>
@@ -90,8 +151,13 @@ const Home = () => {
       {/* CATEGORIES */}
       <section>
         <div className="flex justify-between items-center mb-5">
-          <h2 className="font-heading font-bold text-xl sm:text-2xl">Shop by Category</h2>
-          <Link to="/categories" className="text-primary text-sm font-semibold flex items-center gap-1 hover:gap-2 transition-all">
+          <h2 className="font-heading font-bold text-xl sm:text-2xl">
+            Shop by Category
+          </h2>
+          <Link
+            to="/categories"
+            className="text-primary text-sm font-semibold flex items-center gap-1 hover:gap-2 transition-all"
+          >
             View All <FiArrowRight />
           </Link>
         </div>
@@ -114,6 +180,70 @@ const Home = () => {
         </div>
       </section>
 
+      {/* 🎟️ COUPONS */}
+      {coupons.length > 0 && (
+        <section>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="font-heading font-bold text-xl sm:text-2xl">
+              🎟️ Available Coupons
+            </h2>
+            <Link
+              to="/coupons"
+              className="text-primary text-sm font-semibold flex items-center gap-1 hover:gap-2 transition-all"
+            >
+              View All <FiArrowRight />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {coupons.slice(0, 3).map((c) => (
+              <div
+                key={c._id}
+                className="relative bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-dashed border-primary/40 rounded-2xl p-4 overflow-hidden"
+              >
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-bg" />
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-5 h-5 rounded-full bg-bg" />
+
+                <div className="flex items-center gap-2 mb-2">
+                  <FiTag className="text-primary text-xl" />
+                  <span className="font-heading font-bold text-xl text-primary">
+                    {c.discountType === "PERCENTAGE"
+                      ? `${c.discountValue}% OFF`
+                      : `₹${c.discountValue} OFF`}
+                  </span>
+                </div>
+                <p className="text-xs text-muted mb-1 line-clamp-1">
+                  {c.description}
+                </p>
+                <p className="text-[10px] text-muted mb-3">
+                  Min order ₹{c.minOrderValue}
+                  {c.maxDiscount && ` · Max ₹${c.maxDiscount}`}
+                </p>
+                <div className="flex items-center justify-between pt-3 border-t border-dashed border-primary/30">
+                  <span className="px-2.5 py-1 rounded-md bg-white border border-dashed border-primary text-xs font-bold text-primary tracking-wider">
+                    {c.code}
+                  </span>
+                  <button
+                    onClick={() => handleCopyCoupon(c.code)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-dark transition"
+                  >
+                    {copiedCode === c.code ? (
+                      <>
+                        <FiCheck /> Copied
+                      </>
+                    ) : (
+                      <>
+                        <FiCopy /> Copy
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* OFFER BANNER */}
       <section className="rounded-2xl bg-gradient-to-r from-secondary to-[#2a2a4e] text-white p-6 sm:p-10 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>
@@ -131,18 +261,38 @@ const Home = () => {
         </Link>
       </section>
 
-      {/* FEATURED PRODUCTS */}
+      {/* 🌍 NEARBY / FEATURED PRODUCTS */}
       <section>
-        <div className="flex justify-between items-center mb-5">
-          <h2 className="font-heading font-bold text-xl sm:text-2xl">Featured Products</h2>
-          <Link to="/products" className="text-primary text-sm font-semibold flex items-center gap-1 hover:gap-2 transition-all">
+        <div className="flex justify-between items-center mb-5 flex-wrap gap-2">
+          <div>
+            <h2 className="font-heading font-bold text-xl sm:text-2xl flex items-center gap-2">
+              {location ? (
+                <>
+                  <FiMapPin className="text-primary" /> Nearby Products
+                </>
+              ) : (
+                "Featured Products"
+              )}
+            </h2>
+            {location && (
+              <p className="text-xs text-muted mt-0.5">
+                📍 Within 10 km of {location.name}
+              </p>
+            )}
+          </div>
+          <Link
+            to="/products"
+            className="text-primary text-sm font-semibold flex items-center gap-1 hover:gap-2 transition-all"
+          >
             View All <FiArrowRight />
           </Link>
         </div>
 
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {[...Array(8)].map((_, i) => <SkeletonCard key={i} />)}
+            {[...Array(8)].map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
           </div>
         ) : error ? (
           <div className="bg-red-50 text-red-700 p-6 rounded-xl text-center">
@@ -150,9 +300,19 @@ const Home = () => {
           </div>
         ) : products.length === 0 ? (
           <div className="bg-white rounded-xl shadow-card p-12 text-center">
-            <div className="text-6xl mb-4">📦</div>
-            <h3 className="font-heading font-bold text-lg mb-2">No products yet</h3>
-            <p className="text-sm text-muted">Sellers will add products soon</p>
+            <div className="text-6xl mb-4">
+              {location ? "🏪" : "📦"}
+            </div>
+            <h3 className="font-heading font-bold text-lg mb-2">
+              {location
+                ? "No nearby products"
+                : "No products yet"}
+            </h3>
+            <p className="text-sm text-muted">
+              {location
+                ? `Koi product 10 km ke andar nahi mila. Location change karein ya baad me try karein.`
+                : "Sellers will add products soon"}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">

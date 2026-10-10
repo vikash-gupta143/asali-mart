@@ -1,14 +1,18 @@
+import { useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   FiGrid, FiPackage, FiTruck, FiDollarSign,
-  FiUser, FiLogOut, FiHome,
+  FiUser, FiLogOut, FiHome, FiBell,
 } from "react-icons/fi";
+import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
+import { useSocket } from "../context/SocketContext";
 
 const DeliveryLayout = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const socket = useSocket();
 
   const menu = [
     { name: "Dashboard", path: "/delivery", icon: FiGrid },
@@ -16,12 +20,59 @@ const DeliveryLayout = () => {
     { name: "My Deliveries", path: "/delivery/my-deliveries", icon: FiTruck },
     { name: "Earnings", path: "/delivery/earnings", icon: FiDollarSign },
     { name: "Profile", path: "/delivery/profile", icon: FiUser },
+    { name: "Wallet", path: "/delivery/wallet", icon: FiDollarSign },
   ];
 
   const handleLogout = () => {
     logout();
     navigate("/");
   };
+
+  // 🔔 Real-time notification — new order available
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewOrder = (data) => {
+      console.log("🔔 New order:", data);
+
+      // 🔊 Play notification sound
+      try {
+        const audio = new Audio("/notification.mp3");
+        audio.volume = 0.5;
+        audio.play().catch(() => {});
+      } catch (e) {
+        console.log("Sound play failed");
+      }
+
+      // 📢 Show toast
+      toast.success(
+        (t) => (
+          <div
+            onClick={() => {
+              navigate("/delivery/available");
+              toast.dismiss(t.id);
+            }}
+            className="cursor-pointer"
+          >
+            <p className="font-bold text-sm">🔔 {data.message}</p>
+            <p className="text-xs text-muted mt-1">
+              #{data.orderNumber} · ₹{data.earnings}
+            </p>
+            <p className="text-xs text-primary font-semibold mt-1">
+              Click to view →
+            </p>
+          </div>
+        ),
+        { duration: 8000 }
+      );
+    };
+
+    socket.on("order:available", handleNewOrder);
+
+    return () => {
+      socket.off("order:available", handleNewOrder);
+    };
+  }, [socket, navigate]);
 
   return (
     <div className="min-h-screen bg-bg flex">

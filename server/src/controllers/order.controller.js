@@ -1,11 +1,27 @@
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import Coupon from "../models/Coupon.js";
+import Shop from "../models/Shop.js";
 import {
   sendOTPEmail,
   sendOrderConfirmationEmail,
   sendOrderDeliveredEmail,
 } from "../services/email.service.js";
+
+import {
+  emitToUser,
+  emitToDeliveryPartners,
+  emitToNearestDeliveryPartners,
+} from "../config/socket.js";
+
+import { creditSellerWallet } from "./sellerWallet.controller.js";
+import {
+  isDeliveryAvailable,
+  getCurrentRadius,
+  getCurrentTimeWindow,
+  getDeliveryCharge,
+  calculateDistance,
+} from "../config/delivery.config.js";
 
 // 🎲 OTP Generator — 4 digit
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString();
@@ -26,6 +42,45 @@ export const createOrder = async (req, res, next) => {
 
     if (!shippingAddress) {
       return res.status(400).json({ success: false, message: "Shipping address is required" });
+    }
+
+    // 🆕 Layer 2: Google Maps Address Verification
+    if (!shippingAddress.line1 || !shippingAddress.city || !shippingAddress.pincode) {
+      return res.status(400).json({
+        success: false,
+        message: "Complete address required (line1, city, pincode)",
+      });
+    }
+
+    // 🆕 Verify address with Google (optional — fail hone par bhi order chalega)
+    try {
+      const { verifyAddress } = await import("../services/googleMaps.service.js");
+      const fullAddress = `${shippingAddress.line1}, ${shippingAddress.city}, ${shippingAddress.pincode}`;
+      const verified = await verifyAddress(fullAddress);
+
+      if (verified) {
+        if (verified.pincode && verified.pincode !== shippingAddress.pincode) {
+          console.log(
+            `⚠️ Pincode mismatch: user=${shippingAddress.pincode}, google=${verified.pincode}`
+          );
+        }
+        if (verified.pincode) {
+          shippingAddress.pincode = verified.pincode;
+        }
+        console.log(`✅ Address verified: ${verified.formattedAddress}`);
+      } else {
+        console.log(`⚠️ Address verification skipped (API failed)`);
+      }
+    } catch (err) {
+      console.error("Address verification error:", err.message);
+    }
+
+    // 🆕 GPS required
+    if (!shippingAddress.latitude || !shippingAddress.longitude) {
+      return res.status(400).json({
+        success: false,
+        message: "GPS location required. Please enable location.",
+      });
     }
 
     const orderItems = [];
@@ -61,9 +116,88 @@ export const createOrder = async (req, res, next) => {
       itemsPrice += finalPrice * item.qty;
     }
 
-    const deliveryCharge = itemsPrice > 500 ? 0 : 30;
+    // 🏪 Pickup Address + Distance check
+    let pickupAddress = {
+      name: orderItems[0]?.shopName || "Seller",
+      phone: "—",
+      line1: "—",
+      city: "—",
+      pincode: "—",
+      coordinates: [0, 0],
+    };
 
-    // 🎟️ Coupon apply karo (agar diya ho)
+    let maxDistance = 0;
+    let pickupShop = null;
+
+    try {
+      const firstSeller = orderItems[0]?.seller;
+      if (firstSeller) {
+        const shop = await Shop.findOne({ owner: firstSeller });
+        if (shop) {
+          pickupShop = shop;
+          pickupAddress = {
+            name: shop.name || orderItems[0]?.shopName || "Shop",
+            phone: shop.phone || "—",
+            line1: shop.address?.line1 || "—",
+            city: shop.address?.city || "—",
+            pincode: shop.address?.pincode || "—",
+            coordinates: shop.location?.coordinates || [0, 0],
+          };
+
+          if (
+            shop.location?.coordinates?.[0] &&
+            shippingAddress.latitude &&
+            shippingAddress.longitude
+          ) {
+            maxDistance = calculateDistance(
+              Number(shippingAddress.latitude),
+              Number(shippingAddress.longitude),
+              shop.location.coordinates[1],
+              shop.location.coordinates[0]
+            );
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Pickup address error:", err.message);
+    }
+
+    // 🚚 Delivery availability check
+    if (maxDistance > 0) {
+      const currentRadius = getCurrentRadius();
+      const timeWindow = getCurrentTimeWindow();
+
+      if (!isDeliveryAvailable(maxDistance)) {
+        return res.status(400).json({
+          success: false,
+          message: `Abhi ${currentRadius} km tak delivery available hai (${timeWindow}). Aapka order ${maxDistance.toFixed(1)} km door hai.`,
+          maxRadius: currentRadius,
+          distance: Math.round(maxDistance * 10) / 10,
+          timeWindow,
+        });
+      }
+    }
+
+    // 🚚 Delivery charge
+    let deliveryCharge = 0;
+    let deliveryChargeType = "free";
+
+    if (maxDistance > 0) {
+      deliveryCharge = getDeliveryCharge(maxDistance);
+      deliveryChargeType = "distance";
+    } else {
+      deliveryCharge = itemsPrice > 500 ? 0 : 30;
+      deliveryChargeType = itemsPrice > 500 ? "free" : "flat";
+    }
+
+    if (itemsPrice > 500 && deliveryCharge > 0) {
+      deliveryCharge = 0;
+      deliveryChargeType = "free_above_500";
+    }
+
+    const platformFee = 10;
+
+    // 🎟️ Coupon
     let couponDiscount = 0;
     let appliedCouponCode = "";
     let couponDoc = null;
@@ -106,27 +240,59 @@ export const createOrder = async (req, res, next) => {
       }
     }
 
-    const totalAmount = itemsPrice + deliveryCharge - couponDiscount;
+    const totalAmount = itemsPrice + deliveryCharge + platformFee - couponDiscount;
 
-    // 💰 Commission calculate karo
-    const commissionAmount = Math.round((totalAmount * COMMISSION_RATE) / 100);
-    const sellerEarnings = totalAmount - commissionAmount;
+    // 💰 Commission
+    const commissionAmount = Math.round((itemsPrice * COMMISSION_RATE) / 100);
+    const sellerEarning = itemsPrice - commissionAmount;
+    const deliveryEarning = Math.round((deliveryCharge * 80) / 100);
+    const platformRevenue =
+      commissionAmount +
+      (deliveryCharge - deliveryEarning) +
+      platformFee;
 
     const chosenDeliveryType = deliveryType === "ASALIMART" ? "ASALIMART" : "SELLER";
-
-    // 🎲 OTP generate — HAMESHA (SELLER + ASALIMART dono me)
     const otp = generateOTP();
+
+    // 🆕 Shipping address with coordinates
+    const shippingAddressWithCoords = {
+      ...shippingAddress,
+      coordinates: [
+        Number(shippingAddress.longitude) || 0,
+        Number(shippingAddress.latitude) || 0,
+      ],
+    };
+
+    // 🆕 Payment details
+    let paymentDetailsData = {
+      method: "COD",
+      status: "PENDING",
+    };
+
+    if (paymentMode === "ONLINE" && req.body.paymentDetails) {
+      paymentDetailsData = {
+        method: "ONLINE",
+        status: "PENDING", // Admin verify karega
+        transactionId: req.body.paymentDetails.transactionId || "",
+        screenshot: req.body.paymentDetails.screenshot || "",
+        paidTo: req.body.paymentDetails.paidTo || "",
+      };
+    }
 
     const order = await Order.create({
       user: req.user._id,
       items: orderItems,
-      shippingAddress,
+      shippingAddress: shippingAddressWithCoords,
+      pickupAddress,
       itemsPrice,
       deliveryCharge,
+      deliveryChargeType,
+      platformFee,
       discount: couponDiscount,
       couponCode: appliedCouponCode,
       totalAmount,
       paymentMode: paymentMode || "COD",
+      paymentDetails: paymentDetailsData, // 🆕
       orderStatus: "PLACED",
       deliveryType: chosenDeliveryType,
       deliveryPartner: null,
@@ -134,7 +300,12 @@ export const createOrder = async (req, res, next) => {
       deliveryOTPVerified: false,
       commissionRate: COMMISSION_RATE,
       commissionAmount,
-      sellerEarnings,
+      sellerEarning,
+      deliveryEarning,
+      platformRevenue,
+      distance: Math.round(maxDistance * 10) / 10,
+      timeWindow: getCurrentTimeWindow(),
+      maxRadiusAtOrder: getCurrentRadius(),
     });
 
     // 🎟️ Mark coupon as used
@@ -148,7 +319,7 @@ export const createOrder = async (req, res, next) => {
       }
     }
 
-    // 📧 Order confirmation email (non-blocking)
+    // 📧 Confirmation email
     try {
       await sendOrderConfirmationEmail(req.user.email, order, req.user.name);
       console.log(`📧 Confirmation email sent → ${req.user.email}`);
@@ -158,6 +329,23 @@ export const createOrder = async (req, res, next) => {
 
     for (const item of orderItems) {
       await Product.findByIdAndUpdate(item.product, { $inc: { stock: -item.qty } });
+    }
+
+    // 🔔 SOCKET — Notify sellers
+    try {
+      const uniqueSellers = [...new Set(orderItems.map((i) => i.seller?.toString()).filter(Boolean))];
+
+      uniqueSellers.forEach((sellerId) => {
+        emitToUser(sellerId, "order:new", {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          message: `🛒 New order #${order.orderNumber}`,
+          total: order.totalAmount,
+          itemCount: orderItems.length,
+        });
+      });
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
     }
 
     res.status(201).json({
@@ -179,7 +367,6 @@ export const getMyOrders = async (req, res, next) => {
       .populate("deliveryPartner", "name phone")
       .sort({ createdAt: -1 });
 
-    // ✅ Customer ko OTP dikhao — sirf SHIPPED / OUT_FOR_DELIVERY me
     const ordersWithOTP = orders.map((o) => {
       const obj = o.toObject();
       if (
@@ -232,7 +419,6 @@ export const getOrderById = async (req, res, next) => {
 
     const responseOrder = order.toObject();
 
-    // ✅ OTP visibility — SIRF Customer aur Admin ko
     const canSeeOTP =
       isAdmin ||
       (isOwner &&
@@ -251,7 +437,7 @@ export const getOrderById = async (req, res, next) => {
 
 // @desc    Cancel order
 // @route   PUT /api/orders/:id/cancel
-// @access  Private (Customer who placed it)
+// @access  Private (Customer)
 export const cancelOrder = async (req, res, next) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -279,7 +465,6 @@ export const cancelOrder = async (req, res, next) => {
       await Product.findByIdAndUpdate(item.product, { $inc: { stock: item.qty } });
     }
 
-    // 🎟️ Coupon restore karo
     if (order.couponCode) {
       try {
         await Coupon.findOneAndUpdate(
@@ -295,6 +480,19 @@ export const cancelOrder = async (req, res, next) => {
     }
 
     await order.save();
+
+    try {
+      const uniqueSellers = [...new Set(order.items.map((i) => i.seller?.toString()).filter(Boolean))];
+      uniqueSellers.forEach((sellerId) => {
+        emitToUser(sellerId, "order:cancelled", {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          message: `❌ Order #${order.orderNumber} cancelled`,
+        });
+      });
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -320,10 +518,7 @@ export const getSellerOrders = async (req, res, next) => {
       obj.items = obj.items.filter(
         (i) => i.seller?.toString() === req.user._id.toString()
       );
-
-      // ❌ Seller ko OTP NAHI dikhana
       delete obj.deliveryOTP;
-
       return obj;
     });
 
@@ -389,7 +584,6 @@ export const updateOrderStatus = async (req, res, next) => {
     order.orderStatus = status;
     if (status === "DELIVERED") order.deliveredAt = new Date();
 
-    // 📧 SHIPPED pe OTP email
     if (
       status === "SHIPPED" &&
       order.deliveryOTP &&
@@ -416,6 +610,46 @@ export const updateOrderStatus = async (req, res, next) => {
     }
 
     await order.save();
+
+    if (
+      status === "PACKED" &&
+      order.deliveryType === "ASALIMART" &&
+      !order.deliveryPartner
+    ) {
+      try {
+        const pickupCoords = order.pickupAddress?.coordinates;
+        const pickupLat = pickupCoords?.[1] || null;
+        const pickupLng = pickupCoords?.[0] || null;
+
+        emitToNearestDeliveryPartners(
+          "order:available",
+          {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            pickup: order.pickupAddress?.name || "Shop",
+            drop: `${order.shippingAddress?.city}`,
+            earnings: order.deliveryEarning || 26,
+            message: `🔔 New delivery available nearby!`,
+          },
+          { lat: pickupLat, lng: pickupLng },
+          3,
+          3
+        );
+      } catch (err) {
+        console.error("Socket emit failed:", err.message);
+      }
+    }
+
+    try {
+      emitToUser(order.user.toString(), "order:status", {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: order.orderStatus,
+        message: `Aapka order ab ${order.orderStatus.replace(/_/g, " ")} hai`,
+      });
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -471,7 +705,28 @@ export const sellerVerifyOTPAndDeliver = async (req, res, next) => {
 
     await order.save();
 
-    // 📧 Delivered email to customer
+    try {
+      const uniqueSellers = [
+        ...new Set(order.items.map((i) => i.seller?.toString()).filter(Boolean)),
+      ];
+
+      for (const sellerId of uniqueSellers) {
+        const sellerItems = order.items.filter(
+          (i) => i.seller?.toString() === sellerId
+        );
+        const sellerItemsPrice = sellerItems.reduce(
+          (sum, i) => sum + i.finalPrice * i.qty,
+          0
+        );
+        const commission = Math.round((sellerItemsPrice * COMMISSION_RATE) / 100);
+        const earning = sellerItemsPrice - commission;
+
+        await creditSellerWallet(sellerId, earning, order.orderNumber);
+      }
+    } catch (walletErr) {
+      console.error("Wallet credit failed:", walletErr.message);
+    }
+
     try {
       const customer = await Order.findById(order._id).populate(
         "user",
@@ -490,10 +745,79 @@ export const sellerVerifyOTPAndDeliver = async (req, res, next) => {
       console.error("❌ Delivered email failed:", emailErr.message);
     }
 
+    try {
+      emitToUser(order.user.toString(), "order:delivered", {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: "DELIVERED",
+        message: `✅ Aapka order deliver ho gaya!`,
+      });
+    } catch (err) {
+      console.error("Socket emit failed:", err.message);
+    }
+
     res.status(200).json({
       success: true,
       message: "Order delivered successfully",
       order,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get order tracking (delivery partner live location)
+// @route   GET /api/orders/:id/tracking
+// @access  Private (Customer who owns the order)
+export const getOrderTracking = async (req, res, next) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate("deliveryPartner", "name phone");
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    if (order.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized" });
+    }
+
+    if (!order.deliveryPartner) {
+      return res.json({
+        success: false,
+        message: "No delivery partner assigned yet",
+      });
+    }
+
+    const DeliveryPartner = (await import("../models/DeliveryPartner.js")).default;
+    const partner = await DeliveryPartner.findOne({
+      user: order.deliveryPartner._id,
+    });
+
+    if (!partner?.currentLocation?.coordinates) {
+      return res.json({
+        success: false,
+        message: "Location not available",
+      });
+    }
+
+    const [lng, lat] = partner.currentLocation.coordinates;
+
+    if (lat === 0 && lng === 0) {
+      return res.json({
+        success: false,
+        message: "Delivery partner location not updated yet",
+      });
+    }
+
+    res.json({
+      success: true,
+      location: { lat, lng },
+      partner: {
+        name: order.deliveryPartner.name,
+        phone: order.deliveryPartner.phone,
+      },
+      lastUpdated: partner.lastActiveAt,
     });
   } catch (error) {
     next(error);

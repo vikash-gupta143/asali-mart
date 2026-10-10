@@ -49,3 +49,45 @@ export const fetchRevenueAnalytics = async () => {
   const res = await api.get("/admin/revenue");
   return res.data;
 };
+
+// Payouts
+export const fetchAllPayouts = async (status) => {
+  const res = await api.get("/admin/payouts", { params: { status } });
+  return res.data;
+};
+
+export const approvePayoutApi = async (id, notes) => {
+  const res = await api.put(`/admin/payouts/${id}/approve`, { notes });
+  return res.data;
+};
+
+export const rejectPayoutApi = async (id, reason) => {
+  const res = await api.put(`/admin/payouts/${id}/reject`, { reason });
+  return res.data;
+};
+
+export const markPayoutPaidApi = async (id, data) => {
+  const res = await api.put(`/admin/payouts/${id}/paid`, data);
+  return res.data;
+};
+
+export const verifySellerBankApi = async (sellerId) => {
+  const res = await api.put(`/admin/sellers/${sellerId}/verify-bank`);
+  return res.data;
+};
+
+// Bank Verification
+export const fetchBankVerifications = async (status) => {
+  const res = await api.get("/admin/bank-verifications", { params: { status } });
+  return res.data;
+};
+
+export const verifySellerBankDetailsApi = async (sellerId) => {
+  const res = await api.put(`/admin/bank-verifications/${sellerId}/verify`);
+  return res.data;
+};
+
+export const rejectSellerBankDetailsApi = async (sellerId, reason) => {
+  const res = await api.put(`/admin/bank-verifications/${sellerId}/reject`, { reason });
+  return res.data;
+};

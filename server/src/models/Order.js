@@ -45,14 +45,39 @@ const orderSchema = new mongoose.Schema(
       line1: { type: String, required: true },
       city: { type: String, required: true },
       pincode: { type: String, required: true },
+      coordinates: {
+        type: [Number],
+        default: [0, 0],
+      },
+    },
+
+    // ——— Pickup Address (Seller ki shop) ———
+    pickupAddress: {
+      name: { type: String, default: "" },
+      phone: { type: String, default: "" },
+      line1: { type: String, default: "" },
+      city: { type: String, default: "" },
+      pincode: { type: String, default: "" },
+      coordinates: {
+        type: [Number],
+        default: [0, 0],
+      },
     },
 
     // ——— Pricing ———
     itemsPrice: { type: Number, required: true, default: 0 },
     deliveryCharge: { type: Number, default: 0 },
-    discount: { type: Number, default: 0 },          // ← Coupon discount
-    couponCode: { type: String, default: "" },       // ← Applied coupon
+    platformFee: { type: Number, default: 10 },
+    discount: { type: Number, default: 0 },
+    couponCode: { type: String, default: "" },
     totalAmount: { type: Number, required: true, default: 0 },
+
+    // ——— Business / Commission ———
+    commissionRate: { type: Number, default: 5 },
+    commissionAmount: { type: Number, default: 0 },
+    sellerEarning: { type: Number, default: 0 },
+    deliveryEarning: { type: Number, default: 0 },
+    platformRevenue: { type: Number, default: 0 },
 
     // ——— Payment ———
     paymentMode: {
@@ -64,6 +89,48 @@ const orderSchema = new mongoose.Schema(
       type: String,
       enum: ["PENDING", "PAID", "FAILED"],
       default: "PENDING",
+    },
+
+    // 🆕 ——— Payment Details (Online UPI) ———
+    paymentDetails: {
+      method: {
+        type: String,
+        enum: ["COD", "ONLINE", "UPI"],
+        default: "COD",
+      },
+      status: {
+        type: String,
+        enum: ["PENDING", "PAID", "FAILED", "VERIFIED", "REJECTED"],
+        default: "PENDING",
+      },
+      paidAt: Date,
+      transactionId: { type: String, default: "" },
+      paidTo: { type: String, default: "" },
+      screenshot: { type: String, default: "" },
+      verifiedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      verifiedAt: Date,
+      rejectionReason: { type: String, default: "" },
+    },
+
+    // 🆕 ——— Payment Collection (Delivery Boy ne cash/UPI liya) ———
+    paymentCollection: {
+      method: {
+        type: String,
+        enum: ["CASH", "UPI", "ONLINE", "PENDING"],
+        default: "PENDING",
+      },
+      collectedAt: Date,
+      collectedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      amount: { type: Number, default: 0 },
+      cashSettled: { type: Boolean, default: false },
+      cashSettledAt: Date,
+      cashSettlementRef: { type: String, default: "" },
     },
 
     // ——— Order Status ———
@@ -113,19 +180,10 @@ const orderSchema = new mongoose.Schema(
       default: null,
     },
 
-    // ——— Business / Commission ———  ← NAYA
-    commissionRate: {
-      type: Number,
-      default: 5,          // 5% platform commission
-    },
-    commissionAmount: {
-      type: Number,
-      default: 0,
-    },
-    sellerEarnings: {
-      type: Number,
-      default: 0,
-    },
+    // ——— Distance / Time ———
+    distance: { type: Number, default: 0 },
+    timeWindow: { type: String, default: "" },
+    maxRadiusAtOrder: { type: Number, default: 0 },
 
     // ——— Status History ———
     statusHistory: [

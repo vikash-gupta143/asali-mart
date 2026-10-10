@@ -5,7 +5,7 @@ import {
 } from "react-icons/fi";
 import { useCart } from "../../context/CartContext";
 import { useAuth } from "../../context/AuthContext";
-import { useLocation } from "../../hooks/useLocation";
+import { useLocation } from "../../context/LocationContext";
 import LocationModal from "../common/LocationModal";
 
 const Navbar = () => {

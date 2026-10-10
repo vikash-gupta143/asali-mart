@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { FiShoppingBag, FiPackage } from "react-icons/fi";
+import { FiShoppingBag } from "react-icons/fi";
 import { fetchSellerOrders, updateOrderStatusApi } from "../../services/orderService";
 
 const statusColors = {
@@ -68,7 +68,9 @@ const SellerOrders = () => {
         <div className="bg-white rounded-xl shadow-card p-12 text-center">
           <FiShoppingBag className="text-5xl text-muted mx-auto mb-3" />
           <h3 className="font-heading font-bold text-lg mb-2">No orders yet</h3>
-          <p className="text-sm text-muted">Orders from customers will appear here</p>
+          <p className="text-sm text-muted">
+            Orders from customers will appear here
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -76,13 +78,17 @@ const SellerOrders = () => {
             <div key={order._id} className="bg-white rounded-xl shadow-card p-4">
               <div className="flex justify-between items-start flex-wrap gap-2 mb-3">
                 <div>
-                  <p className="font-semibold text-sm">Order #{order.orderNumber}</p>
+                  <p className="font-semibold text-sm">
+                    Order #{order.orderNumber}
+                  </p>
                   <p className="text-xs text-muted">
                     {new Date(order.createdAt).toLocaleDateString("en-IN")} •{" "}
                     {order.shippingAddress?.name}
                   </p>
                 </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[order.orderStatus]}`}>
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-semibold ${statusColors[order.orderStatus]}`}
+                >
                   {order.orderStatus.replace(/_/g, " ")}
                 </span>
               </div>
@@ -91,10 +97,16 @@ const SellerOrders = () => {
               <div className="space-y-2 mb-3">
                 {order.items.map((item, i) => (
                   <div key={i} className="flex items-center gap-3">
-                    <img src={item.image} className="w-12 h-12 rounded-lg object-cover" alt="" />
+                    <img
+                      src={item.image}
+                      className="w-12 h-12 rounded-lg object-cover"
+                      alt=""
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{item.name}</p>
-                      <p className="text-xs text-muted">Qty: {item.qty} × ₹{item.finalPrice}</p>
+                      <p className="text-xs text-muted">
+                        Qty: {item.qty} × ₹{item.finalPrice}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -104,30 +116,68 @@ const SellerOrders = () => {
               <div className="p-3 rounded-lg bg-bg mb-3">
                 <p className="text-xs text-muted mb-1">Deliver to:</p>
                 <p className="text-xs font-medium">
-                  {order.shippingAddress?.line1}, {order.shippingAddress?.city} -{" "}
+                  {order.shippingAddress?.line1},{" "}
+                  {order.shippingAddress?.city} -{" "}
                   {order.shippingAddress?.pincode}
                 </p>
-                <p className="text-xs text-muted">📞 {order.shippingAddress?.phone}</p>
+                <p className="text-xs text-muted">
+                  📞 {order.shippingAddress?.phone}
+                </p>
+              </div>
+
+              {/* 💰 Earning Breakdown */}
+              <div className="p-3 rounded-lg bg-green-50 border border-green-100 mb-3 space-y-1.5 text-xs">
+                <p className="font-semibold text-dark mb-1">💰 Your Earning</p>
+
+                <div className="flex justify-between">
+                  <span className="text-muted">Product Price</span>
+                  <span className="font-medium">₹{order.itemsPrice}</span>
+                </div>
+
+                <div className="flex justify-between text-red-600">
+                  <span>
+                    Commission ({order.commissionRate || 5}%)
+                  </span>
+                  <span>-₹{order.commissionAmount || 0}</span>
+                </div>
+
+                <div className="flex justify-between font-bold text-accent pt-1 border-t border-green-200">
+                  <span>You will get</span>
+                  <span>₹{order.sellerEarning || 0}</span>
+                </div>
               </div>
 
               {/* Actions */}
               <div className="flex justify-between items-center pt-3 border-t">
                 <div>
-                  <p className="text-xs text-muted">Total</p>
-                  <p className="font-bold text-primary">₹{order.totalAmount}</p>
+                  <p className="text-xs text-muted">Customer paid</p>
+                  <p className="font-bold text-primary">
+                    ₹{order.totalAmount}
+                  </p>
+                  <p className="text-[10px] text-muted">
+                    (incl. delivery + platform fee)
+                  </p>
                 </div>
 
                 {order.orderStatus === "CANCELLED" ? (
-                  <span className="text-xs text-danger font-semibold">Cancelled</span>
+                  <span className="text-xs text-danger font-semibold">
+                    Cancelled
+                  </span>
                 ) : order.orderStatus === "DELIVERED" ? (
-                  <span className="text-xs text-accent font-semibold">✓ Delivered</span>
+                  <span className="text-xs text-accent font-semibold">
+                    ✓ Delivered
+                  </span>
                 ) : (
                   <button
-                    onClick={() => updateStatus(order._id, statusFlow[order.orderStatus])}
+                    onClick={() =>
+                      updateStatus(order._id, statusFlow[order.orderStatus])
+                    }
                     disabled={updating === order._id}
                     className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary-dark transition disabled:opacity-50"
                   >
-                    {updating === order._id ? "Updating..." : `Mark as ${statusFlow[order.orderStatus].replace(/_/g, " ")}`}
+                    {updating === order._id
+                      ? "Updating..."
+                      : `Mark as ${statusFlow[order.orderStatus].replace(/_/g, " ")}`}
                   </button>
                 )}
               </div>

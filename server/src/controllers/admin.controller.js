@@ -214,32 +214,66 @@ export const getRevenueAnalytics = async (req, res, next) => {
       totalRevenueData,
       totalCommissionData,
       totalSellerEarnings,
+      totalDeliveryEarnings,
+      totalPlatformFee,
+      totalDeliveryMargin,
+      totalPlatformRevenue,
       deliveredOrders,
       monthRevenue,
       weekRevenue,
     ] = await Promise.all([
-      // Total revenue
+      // Total customer paid
       Order.aggregate([
         { $match: { orderStatus: "DELIVERED" } },
         { $group: { _id: null, total: { $sum: "$totalAmount" } } },
       ]),
-      // Total commission
+      // Commission
       Order.aggregate([
         { $match: { orderStatus: "DELIVERED" } },
         { $group: { _id: null, total: { $sum: "$commissionAmount" } } },
       ]),
-      // Total seller earnings
+      // Seller earnings
       Order.aggregate([
         { $match: { orderStatus: "DELIVERED" } },
-        { $group: { _id: null, total: { $sum: "$sellerEarnings" } } },
+        { $group: { _id: null, total: { $sum: "$sellerEarning" } } },
       ]),
+      // Delivery partner earnings
+      Order.aggregate([
+        { $match: { orderStatus: "DELIVERED" } },
+        { $group: { _id: null, total: { $sum: "$deliveryEarning" } } },
+      ]),
+      // Platform fee
+      Order.aggregate([
+        { $match: { orderStatus: "DELIVERED" } },
+        { $group: { _id: null, total: { $sum: "$platformFee" } } },
+      ]),
+      // Delivery margin (delivery charge - partner earning)
+      Order.aggregate([
+        { $match: { orderStatus: "DELIVERED" } },
+        {
+          $group: {
+            _id: null,
+            total: {
+              $sum: { $subtract: ["$deliveryCharge", "$deliveryEarning"] },
+            },
+          },
+        },
+      ]),
+      // Total platform revenue
+      Order.aggregate([
+        { $match: { orderStatus: "DELIVERED" } },
+        { $group: { _id: null, total: { $sum: "$platformRevenue" } } },
+      ]),
+      // Count
       Order.countDocuments({ orderStatus: "DELIVERED" }),
       // This month
       Order.aggregate([
         {
           $match: {
             orderStatus: "DELIVERED",
-            createdAt: { $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
+            createdAt: {
+              $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+            },
           },
         },
         { $group: { _id: null, total: { $sum: "$totalAmount" } } },
@@ -262,10 +296,69 @@ export const getRevenueAnalytics = async (req, res, next) => {
         total: totalRevenueData[0]?.total || 0,
         commission: totalCommissionData[0]?.total || 0,
         sellerEarnings: totalSellerEarnings[0]?.total || 0,
+        deliveryEarnings: totalDeliveryEarnings[0]?.total || 0,
+        platformFee: totalPlatformFee[0]?.total || 0,
+        deliveryMargin: totalDeliveryMargin[0]?.total || 0,
+        platformRevenue: totalPlatformRevenue[0]?.total || 0,
         deliveredOrders,
         thisMonth: monthRevenue[0]?.total || 0,
         thisWeek: weekRevenue[0]?.total || 0,
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// @desc    Get pending payment orders
+// @route   GET /api/admin/orders/pending-payments
+// @access  Private (ADMIN)
+export const getPendingPayments = async (req, res, next) => {
+  try {
+    const orders = await Order.find({
+      paymentMode: "ONLINE",
+      "paymentDetails.status": "PENDING",
+    })
+      .populate("user", "name email phone")
+      .sort({ createdAt: -1 });
+
+    res.json({ success: true, count: orders.length, orders });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Verify/reject payment
+// @route   PUT /api/admin/orders/:id/verify-payment
+// @access  Private (ADMIN)
+export const verifyPayment = async (req, res, next) => {
+  try {
+    const { action } = req.body;
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    if (action === "approve") {
+      order.paymentDetails.status = "VERIFIED";
+      order.paymentStatus = "PAID";
+      order.orderStatus = "CONFIRMED";
+    } else {
+      order.paymentDetails.status = "FAILED";
+      order.orderStatus = "CANCELLED";
+      order.cancelReason = "Payment verification failed";
+    }
+
+    order.paymentDetails.verifiedBy = req.user._id;
+    order.paymentDetails.verifiedAt = new Date();
+    await order.save();
+
+    res.json({
+      success: true,
+      message: `Payment ${action}ed`,
+      order,
     });
   } catch (error) {
     next(error);

@@ -2,21 +2,28 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FiPackage, FiShoppingBag, FiDollarSign, FiTrendingUp,
-  FiPlusCircle, FiEye, FiArrowRight,
+  FiPlusCircle, FiEye, FiArrowRight, FiClock, FiCheckCircle,
 } from "react-icons/fi";
 import { useAuth } from "../../context/AuthContext";
 import { fetchMyProducts } from "../../services/productService";
+import { fetchSellerEarnings } from "../../services/sellerService";
 
 const Dashboard = () => {
   const { user } = useAuth();
   const [products, setProducts] = useState([]);
+  const [earnings, setEarnings] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await fetchMyProducts();
-        setProducts(data.products || []);
+        const [productsData, earningsData] = await Promise.all([
+          fetchMyProducts().catch(() => null),
+          fetchSellerEarnings().catch(() => null),
+        ]);
+
+        if (productsData) setProducts(productsData.products || []);
+        if (earningsData) setEarnings(earningsData.earnings);
       } catch (err) {
         console.error(err);
       } finally {
@@ -34,11 +41,31 @@ const Dashboard = () => {
   );
   const lowStock = products.filter((p) => p.stock > 0 && p.stock < 10).length;
 
-  const stats = [
-    { label: "Total Products", value: totalProducts, icon: FiPackage, color: "bg-blue-50 text-blue-600" },
-    { label: "Total Stock", value: totalStock, icon: FiShoppingBag, color: "bg-green-50 text-green-600" },
-    { label: "Inventory Value", value: `₹${totalValue.toLocaleString()}`, icon: FiDollarSign, color: "bg-orange-50 text-orange-600" },
-    { label: "Low Stock", value: lowStock, icon: FiTrendingUp, color: "bg-red-50 text-red-600" },
+  const productStats = [
+    {
+      label: "Total Products",
+      value: totalProducts,
+      icon: FiPackage,
+      color: "bg-blue-50 text-blue-600",
+    },
+    {
+      label: "Total Stock",
+      value: totalStock,
+      icon: FiShoppingBag,
+      color: "bg-green-50 text-green-600",
+    },
+    {
+      label: "Inventory Value",
+      value: `₹${totalValue.toLocaleString()}`,
+      icon: FiDollarSign,
+      color: "bg-orange-50 text-orange-600",
+    },
+    {
+      label: "Low Stock",
+      value: lowStock,
+      icon: FiTrendingUp,
+      color: "bg-red-50 text-red-600",
+    },
   ];
 
   return (
@@ -53,19 +80,93 @@ const Dashboard = () => {
         </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((s) => (
-          <div key={s.label} className="bg-white rounded-xl shadow-card p-4">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg mb-3 ${s.color}`}>
-              <s.icon />
-            </div>
-            <p className="text-2xl font-heading font-bold text-dark">
-              {loading ? "..." : s.value}
-            </p>
-            <p className="text-xs text-muted mt-1">{s.label}</p>
+      {/* 💰 Earnings Cards */}
+      {earnings && (
+        <div>
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="font-heading font-bold text-lg">💰 Earnings</h2>
+            <Link
+              to="/seller/earnings"
+              className="text-primary text-sm font-semibold flex items-center gap-1 hover:gap-2 transition"
+            >
+              View Details <FiArrowRight />
+            </Link>
           </div>
-        ))}
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Total Earnings */}
+            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-card p-4 text-white">
+              <div className="flex items-center gap-2 mb-2">
+                <FiDollarSign className="text-xl opacity-90" />
+                <p className="text-xs opacity-90">Total Earnings</p>
+              </div>
+              <p className="font-heading font-bold text-2xl">
+                ₹{earnings.totalEarnings?.toLocaleString() || 0}
+              </p>
+              <p className="text-[10px] opacity-80 mt-1">
+                {earnings.totalDeliveredOrders || 0} delivered orders
+              </p>
+            </div>
+
+            {/* Pending Payout */}
+            <div className="bg-white rounded-xl shadow-card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <FiClock className="text-orange-500 text-xl" />
+                <p className="text-xs text-muted">Pending Payout</p>
+              </div>
+              <p className="font-heading font-bold text-2xl text-dark">
+                ₹{earnings.pendingEarnings?.toLocaleString() || 0}
+              </p>
+              <p className="text-[10px] text-muted mt-1">
+                {earnings.totalPendingOrders || 0} orders in progress
+              </p>
+            </div>
+
+            {/* This Month */}
+            <div className="bg-white rounded-xl shadow-card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <FiTrendingUp className="text-blue-500 text-xl" />
+                <p className="text-xs text-muted">This Month</p>
+              </div>
+              <p className="font-heading font-bold text-2xl text-dark">
+                ₹{earnings.monthEarnings?.toLocaleString() || 0}
+              </p>
+              <p className="text-[10px] text-muted mt-1">Monthly earnings</p>
+            </div>
+
+            {/* This Week */}
+            <div className="bg-white rounded-xl shadow-card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <FiCheckCircle className="text-purple-500 text-xl" />
+                <p className="text-xs text-muted">This Week</p>
+              </div>
+              <p className="font-heading font-bold text-2xl text-dark">
+                ₹{earnings.weekEarnings?.toLocaleString() || 0}
+              </p>
+              <p className="text-[10px] text-muted mt-1">Weekly earnings</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📦 Product Stats */}
+      <div>
+        <h2 className="font-heading font-bold text-lg mb-3">📦 Product Stats</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {productStats.map((s) => (
+            <div key={s.label} className="bg-white rounded-xl shadow-card p-4">
+              <div
+                className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg mb-3 ${s.color}`}
+              >
+                <s.icon />
+              </div>
+              <p className="text-2xl font-heading font-bold text-dark">
+                {loading ? "..." : s.value}
+              </p>
+              <p className="text-xs text-muted mt-1">{s.label}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Quick Actions */}
@@ -99,15 +200,15 @@ const Dashboard = () => {
           </Link>
 
           <Link
-            to="/"
-            className="flex items-center gap-3 p-4 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-100 transition"
+            to="/seller/earnings"
+            className="flex items-center gap-3 p-4 rounded-xl bg-green-50 hover:bg-green-100 border border-green-100 transition"
           >
-            <div className="w-10 h-10 rounded-lg bg-secondary text-white flex items-center justify-center">
-              <FiEye />
+            <div className="w-10 h-10 rounded-lg bg-green-500 text-white flex items-center justify-center">
+              <FiDollarSign />
             </div>
             <div>
-              <p className="font-semibold text-sm text-dark">View Store</p>
-              <p className="text-xs text-muted">See how customers see</p>
+              <p className="font-semibold text-sm text-dark">Earnings</p>
+              <p className="text-xs text-muted">View payouts</p>
             </div>
           </Link>
         </div>

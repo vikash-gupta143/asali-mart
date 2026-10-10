@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FiMapPin, FiX, FiCrosshair } from "react-icons/fi";
+import { useLocation } from "../../context/LocationContext";
 
 const cities = [
   { name: "Mumbai", lat: 19.076, lng: 72.8777 },

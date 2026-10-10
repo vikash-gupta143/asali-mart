@@ -103,6 +103,36 @@ const Dashboard = () => {
     );
   };
 
+// 🆕 Auto-update location every 30 seconds when online
+useEffect(() => {
+  if (!isOnline) return;
+
+  const interval = setInterval(() => {
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await updateLocationApi(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            true
+          );
+          console.log("📍 Location updated");
+        } catch (err) {
+          console.error("Location update failed:", err.message);
+        }
+      },
+      (err) => console.error("Geo error:", err.message),
+      { enableHighAccuracy: false, timeout: 10000 }
+    );
+  }, 25000); // 25 seconds
+
+  return () => clearInterval(interval);
+}, [isOnline]);
+
+
+
   // 🔴 Go Offline
   const handleGoOffline = async () => {
     try {

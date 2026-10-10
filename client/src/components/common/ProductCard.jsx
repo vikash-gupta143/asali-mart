@@ -1,11 +1,10 @@
 import { Link } from "react-router-dom";
-import { FiStar, FiShoppingCart } from "react-icons/fi";
+import { FiStar, FiShoppingCart, FiMapPin, FiClock } from "react-icons/fi";
 import { useCart } from "../../context/CartContext";
 
 const ProductCard = ({ product }) => {
   const { addToCart } = useCart();
 
-  // Backend format — always use _id
   const id = product._id || product.id;
   const name = product.name;
   const image = product.images?.[0] || product.image;
@@ -16,22 +15,24 @@ const ProductCard = ({ product }) => {
   const rating = product.rating || 0;
   const shop = product.shopName || product.shop || "AsaliMart";
   const stock = product.stock ?? 0;
+  const distance = product.distance;
 
   const handleAddToCart = () => {
-    if (!id || typeof id !== "string" || id.length !== 24) {
-      console.error("❌ Invalid product ID:", id, product);
-      alert("Product ID invalid hai. Backend se product load nahi hua.");
+    if (!id) {
+      console.error("Product has no _id:", product);
       return;
     }
 
     addToCart({
       _id: id,
+      id: id,
       name,
       image,
       price,
       discount,
       finalPrice,
       shopName: shop,
+      stock,
     });
   };
 
@@ -44,11 +45,29 @@ const ProductCard = ({ product }) => {
             alt={name}
             className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
           />
+
+          {/* Discount badge */}
           {discount > 0 && (
             <span className="absolute top-2 left-2 bg-danger text-white text-[10px] font-bold px-2 py-1 rounded-md">
               {discount}% OFF
             </span>
           )}
+
+          {/* 📍 Distance badge */}
+         {distance !== undefined && (
+  <div className="absolute bottom-2 left-2 flex flex-col gap-1">
+    <span className="bg-white/95 backdrop-blur text-primary text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-card">
+      <FiMapPin className="text-[10px]" />
+      {distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance} km`}
+    </span>
+    <span className="bg-white/95 backdrop-blur text-green-600 text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1 shadow-card">
+      <FiClock className="text-[10px]" />
+      {distance <= 2 ? "15-20 min" : distance <= 5 ? "25-35 min" : "35-50 min"}
+    </span>
+  </div>
+)}
+
+          {/* Stock badges */}
           {stock < 10 && stock > 0 && (
             <span className="absolute top-2 right-2 bg-secondary text-white text-[10px] font-bold px-2 py-1 rounded-md">
               Only {stock} left
@@ -79,7 +98,9 @@ const ProductCard = ({ product }) => {
           <div>
             <span className="font-bold text-dark">₹{finalPrice}</span>
             {discount > 0 && (
-              <span className="text-xs text-muted line-through ml-1">₹{price}</span>
+              <span className="text-xs text-muted line-through ml-1">
+                ₹{price}
+              </span>
             )}
           </div>
           <button

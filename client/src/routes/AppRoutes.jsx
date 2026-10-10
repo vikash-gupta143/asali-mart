@@ -34,15 +34,20 @@ import DeliveryDashboard from "../pages/delivery/Dashboard";
 import Available from "../pages/delivery/Available";
 import MyDeliveries from "../pages/delivery/MyDeliveries";
 import Earnings from "../pages/delivery/Earnings";
+import DeliveryWallet from "../pages/delivery/Wallet";
+
 
 // Seller
 import SellerDashboard from "../pages/seller/Dashboard";
+import MyShop from "../pages/seller/MyShop";
 import MyProducts from "../pages/seller/MyProducts";
 import AddProduct from "../pages/seller/AddProduct";
 import EditProduct from "../pages/seller/EditProduct";
 import SellerProfile from "../pages/seller/SellerProfile";
 import SellerOrders from "../pages/seller/SellerOrders";
 import ComingSoon from "../pages/seller/ComingSoon";
+import SellerEarnings from "../pages/seller/Earnings";
+import SellerWallet from "../pages/seller/Wallet"; // 🆕
 
 // Admin
 import AdminDashboard from "../pages/admin/Dashboard";
@@ -53,6 +58,19 @@ import AdminDeliveryPartners from "../pages/admin/DeliveryPartners";
 import AdminCoupons from "../pages/admin/Coupons";
 import AdminRevenue from "../pages/admin/Revenue";
 import AdminComingSoon from "../pages/admin/ComingSoon";
+import AdminShops from "../pages/admin/Shops";
+import AdminPayouts from "../pages/admin/Payouts";
+import AdminBankVerification from "../pages/admin/BankVerification";
+import AdminSettings from "../pages/admin/Settings";
+import AdminOrderVerification from "../pages/admin/OrderVerification";
+
+{/* Legal pages */}
+
+import Terms from "../pages/legal/Terms";
+import Privacy from "../pages/legal/Privacy";
+import Refund from "../pages/legal/Refund";
+import Shipping from "../pages/legal/Shipping";
+import NotFound from "../pages/NotFound";
 
 const AppRoutes = () => {
   return (
@@ -96,6 +114,7 @@ const AppRoutes = () => {
         }
       >
         <Route index element={<SellerDashboard />} />
+        <Route path="shop" element={<MyShop />} />
         <Route path="products" element={<MyProducts />} />
         <Route path="add-product" element={<AddProduct />} />
         <Route path="edit-product/:id" element={<EditProduct />} />
@@ -103,6 +122,8 @@ const AppRoutes = () => {
         <Route path="customers" element={<ComingSoon title="Customers" emoji="👥" />} />
         <Route path="sales" element={<ComingSoon title="Sales Analytics" emoji="📊" />} />
         <Route path="profile" element={<SellerProfile />} />
+        <Route path="earnings" element={<SellerEarnings />} />
+        <Route path="wallet" element={<SellerWallet />} /> {/* 🆕 */}
       </Route>
 
       {/* ============ ADMIN ============ */}
@@ -115,6 +136,7 @@ const AppRoutes = () => {
         }
       >
         <Route index element={<AdminDashboard />} />
+        <Route path="shops" element={<AdminShops />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="sellers" element={<AdminUsers />} />
         <Route path="products" element={<AdminProducts />} />
@@ -122,10 +144,20 @@ const AppRoutes = () => {
         <Route path="delivery-partners" element={<AdminDeliveryPartners />} />
         <Route path="revenue" element={<AdminRevenue />} />
         <Route path="coupons" element={<AdminCoupons />} />
+        <Route path="payouts" element={<AdminPayouts />} />
+        <Route path="bank-verification" element={<AdminBankVerification />} />
+        <Route path="settings" element={<AdminSettings />} />
+        <Route path="order-verification" element={<AdminOrderVerification />} />
         <Route path="payments" element={<AdminComingSoon title="Payments" emoji="💳" />} />
         <Route path="reviews" element={<AdminComingSoon title="Reviews" emoji="⭐" />} />
         <Route path="complaints" element={<AdminComingSoon title="Complaints" emoji="⚠️" />} />
       </Route>
+
+      {/* Legal pages */}
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/refund" element={<Refund />} />
+      <Route path="/shipping" element={<Shipping />} />
 
       {/* ============ DELIVERY PARTNER ============ */}
       <Route
@@ -140,7 +172,11 @@ const AppRoutes = () => {
         <Route path="available" element={<Available />} />
         <Route path="my-deliveries" element={<MyDeliveries />} />
         <Route path="earnings" element={<Earnings />} />
+        <Route path="wallet" element={<DeliveryWallet />} />
       </Route>
+
+      {/* 404 — ALWAYS LAST */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 };

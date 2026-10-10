@@ -1,20 +1,28 @@
+import { useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   FiGrid, FiPackage, FiPlusCircle, FiShoppingBag,
   FiUsers, FiBarChart2, FiUser, FiLogOut, FiHome,
+  FiDollarSign, FiCreditCard,
 } from "react-icons/fi";
+import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
+import { useSocket } from "../context/SocketContext";
 
 const SellerLayout = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const socket = useSocket();
 
   const menu = [
     { name: "Dashboard", path: "/seller", icon: FiGrid },
+    { name: "My Shop", path: "/seller/shop", icon: FiShoppingBag },
     { name: "My Products", path: "/seller/products", icon: FiPackage },
     { name: "Add Product", path: "/seller/add-product", icon: FiPlusCircle },
     { name: "Orders", path: "/seller/orders", icon: FiShoppingBag },
+    { name: "Earnings", path: "/seller/earnings", icon: FiDollarSign },
+    { name: "Wallet", path: "/seller/wallet", icon: FiCreditCard },  // 🆕
     { name: "Customers", path: "/seller/customers", icon: FiUsers },
     { name: "Sales", path: "/seller/sales", icon: FiBarChart2 },
     { name: "Profile", path: "/seller/profile", icon: FiUser },
@@ -24,6 +32,68 @@ const SellerLayout = () => {
     logout();
     navigate("/");
   };
+
+  // 🔔 Real-time notifications
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewOrder = (data) => {
+      console.log("🔔 New order:", data);
+      try {
+        const audio = new Audio("/notification.mp3");
+        audio.volume = 0.5;
+        audio.play().catch(() => {});
+      } catch (e) {}
+
+      toast.success(
+        (t) => (
+          <div
+            onClick={() => {
+              navigate("/seller/orders");
+              toast.dismiss(t.id);
+            }}
+            className="cursor-pointer"
+          >
+            <p className="font-bold text-sm">🛒 {data.message}</p>
+            <p className="text-xs text-muted mt-1">Total: ₹{data.total}</p>
+            <p className="text-xs text-primary font-semibold mt-1">
+              Click to view →
+            </p>
+          </div>
+        ),
+        { duration: 8000 }
+      );
+    };
+
+    const handleCancelled = (data) => {
+      console.log("🔔 Order cancelled:", data);
+      toast.error(
+        (t) => (
+          <div
+            onClick={() => {
+              navigate("/seller/orders");
+              toast.dismiss(t.id);
+            }}
+            className="cursor-pointer"
+          >
+            <p className="font-bold text-sm">❌ {data.message}</p>
+            <p className="text-xs text-muted mt-1">
+              Customer ne order cancel kiya
+            </p>
+          </div>
+        ),
+        { duration: 8000 }
+      );
+    };
+
+    socket.on("order:new", handleNewOrder);
+    socket.on("order:cancelled", handleCancelled);
+
+    return () => {
+      socket.off("order:new", handleNewOrder);
+      socket.off("order:cancelled", handleCancelled);
+    };
+  }, [socket, navigate]);
 
   return (
     <div className="min-h-screen bg-bg flex">
@@ -69,7 +139,9 @@ const SellerLayout = () => {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate">{user?.name}</p>
-              <p className="text-[10px] text-gray-400 truncate">{user?.email}</p>
+              <p className="text-[10px] text-gray-400 truncate">
+                {user?.email}
+              </p>
             </div>
           </div>
           <Link
@@ -99,7 +171,6 @@ const SellerLayout = () => {
 
       {/* Main */}
       <main className="flex-1 lg:ml-0 pt-14 lg:pt-0">
-        {/* Mobile menu bar */}
         <div className="lg:hidden bg-white border-b px-4 py-2 overflow-x-auto">
           <div className="flex gap-2">
             {menu.map((item) => {

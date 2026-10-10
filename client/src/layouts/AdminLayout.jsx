@@ -2,7 +2,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   FiGrid, FiUsers, FiShoppingBag, FiPackage,
   FiCreditCard, FiStar, FiAlertCircle, FiLogOut, FiHome,
-  FiTruck, FiTag, FiBarChart2,
+  FiTruck, FiTag, FiBarChart2, FiDollarSign,FiSettings, FiCheckCircle,   FiXCircle, FiImage,
 } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 
@@ -15,14 +15,19 @@ const AdminLayout = () => {
     { name: "Dashboard", path: "/admin", icon: FiGrid },
     { name: "Users", path: "/admin/users", icon: FiUsers },
     { name: "Sellers", path: "/admin/sellers", icon: FiShoppingBag },
+    { name: "Shops", path: "/admin/shops", icon: FiShoppingBag },
     { name: "Products", path: "/admin/products", icon: FiPackage },
     { name: "Orders", path: "/admin/orders", icon: FiShoppingBag },
     { name: "Delivery Partners", path: "/admin/delivery-partners", icon: FiTruck },
+    { name: "Payouts", path: "/admin/payouts", icon: FiDollarSign },
+    { name: "Bank Verification", path: "/admin/bank-verification", icon: FiCreditCard },
     { name: "Revenue", path: "/admin/revenue", icon: FiBarChart2 },
     { name: "Coupons", path: "/admin/coupons", icon: FiTag },
     { name: "Payments", path: "/admin/payments", icon: FiCreditCard },
     { name: "Reviews", path: "/admin/reviews", icon: FiStar },
     { name: "Complaints", path: "/admin/complaints", icon: FiAlertCircle },
+    { name: "Settings", path: "/admin/settings", icon: FiSettings },
+    { name: "Payment Verify", path: "/admin/order-verification", icon: FiImage },
   ];
 
   const handleLogout = () => {
@@ -74,7 +79,9 @@ const AdminLayout = () => {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate">{user?.name}</p>
-              <p className="text-[10px] text-gray-400 truncate">{user?.email}</p>
+              <p className="text-[10px] text-gray-400 truncate">
+                {user?.email}
+              </p>
             </div>
           </div>
           <Link

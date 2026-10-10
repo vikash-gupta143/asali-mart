@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { FiUpload, FiX, FiPlus, FiSave } from "react-icons/fi";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { FiUpload, FiX, FiPlus, FiSave, FiAlertCircle, FiShoppingBag } from "react-icons/fi";
 import { createProduct } from "../../services/productService";
+import { fetchMyShop } from "../../services/shopService";
 
 const categoriesList = [
   "Electronics", "Fashion", "Grocery", "Home",
@@ -14,6 +15,10 @@ const AddProduct = () => {
   const [error, setError] = useState("");
   const [imageInput, setImageInput] = useState("");
 
+  // 🏪 Shop Check
+  const [shop, setShop] = useState(null);
+  const [checkingShop, setCheckingShop] = useState(true);
+
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -25,6 +30,25 @@ const AddProduct = () => {
     shopName: "",
     images: [],
   });
+
+  // Load shop
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const data = await fetchMyShop();
+        setShop(data.shop);
+        // Auto-fill shop name
+        if (data.shop?.name) {
+          setForm((prev) => ({ ...prev, shopName: data.shop.name }));
+        }
+      } catch (err) {
+        setShop(null);
+      } finally {
+        setCheckingShop(false);
+      }
+    };
+    check();
+  }, []);
 
   const addImage = () => {
     if (!imageInput.trim()) return;
@@ -61,11 +85,84 @@ const AddProduct = () => {
     }
   };
 
+  // 🏪 Shop Check Loading
+  if (checkingShop) {
+    return (
+      <div className="text-center py-20 text-muted">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <p className="mt-3 text-sm">Checking shop...</p>
+      </div>
+    );
+  }
+
+  // 🏪 No Shop — Show Prompt
+  if (!shop) {
+    return (
+      <div className="max-w-xl mx-auto py-10">
+        <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border-2 border-dashed border-yellow-400 rounded-2xl p-8 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-yellow-100 text-yellow-700 flex items-center justify-center mx-auto mb-4">
+            <FiAlertCircle className="text-3xl" />
+          </div>
+
+          <h2 className="font-heading font-bold text-xl mb-2 text-dark">
+            🏪 Shop Zaroori Hai
+          </h2>
+
+          <p className="text-sm text-muted mb-6 max-w-md mx-auto leading-relaxed">
+            Product add karne se pehle apni shop banana zaroori hai.
+            Iske bina:
+          </p>
+
+          <div className="text-left max-w-md mx-auto mb-6 space-y-2">
+            <div className="flex items-start gap-2 text-xs text-muted">
+              <span className="text-danger mt-0.5">✗</span>
+              <span>Nearby customers aapko dhundh nahi payenge</span>
+            </div>
+            <div className="flex items-start gap-2 text-xs text-muted">
+              <span className="text-danger mt-0.5">✗</span>
+              <span>Delivery partner ko pickup address nahi milega</span>
+            </div>
+            <div className="flex items-start gap-2 text-xs text-muted">
+              <span className="text-danger mt-0.5">✗</span>
+              <span>Order flow complete nahi hoga</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link
+              to="/seller/shop"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary-dark transition"
+            >
+              <FiShoppingBag /> Create Shop Now
+            </Link>
+            <Link
+              to="/seller"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border border-gray-200 text-muted font-semibold hover:bg-bg transition"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ Shop Exists — Show Form
   return (
     <div className="max-w-3xl">
       <div className="mb-5">
         <h1 className="font-heading font-bold text-2xl">Add Product</h1>
-        <p className="text-sm text-muted">Fill the details to list a new product</p>
+        <p className="text-sm text-muted">
+          Fill the details to list a new product
+        </p>
+        {shop && (
+          <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-50 border border-green-200">
+            <FiShoppingBag className="text-green-600 text-xs" />
+            <span className="text-xs text-green-700 font-medium">
+              Adding to: <b>{shop.name}</b>
+            </span>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -74,10 +171,15 @@ const AddProduct = () => {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-card p-5 space-y-5">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white rounded-xl shadow-card p-5 space-y-5"
+      >
         {/* Name */}
         <div>
-          <label className="text-sm font-medium mb-1 block">Product Name *</label>
+          <label className="text-sm font-medium mb-1 block">
+            Product Name *
+          </label>
           <input
             type="text"
             required
@@ -90,12 +192,16 @@ const AddProduct = () => {
 
         {/* Description */}
         <div>
-          <label className="text-sm font-medium mb-1 block">Description *</label>
+          <label className="text-sm font-medium mb-1 block">
+            Description *
+          </label>
           <textarea
             required
             rows="4"
             value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            onChange={(e) =>
+              setForm({ ...form, description: e.target.value })
+            }
             placeholder="Describe your product..."
             className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm resize-none"
           />
@@ -104,14 +210,18 @@ const AddProduct = () => {
         {/* Category + Brand */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium mb-1 block">Category *</label>
+            <label className="text-sm font-medium mb-1 block">
+              Category *
+            </label>
             <select
               value={form.category}
               onChange={(e) => setForm({ ...form, category: e.target.value })}
               className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
             >
               {categoriesList.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
           </div>
@@ -130,7 +240,9 @@ const AddProduct = () => {
         {/* Price + Discount + Stock */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label className="text-sm font-medium mb-1 block">Price (₹) *</label>
+            <label className="text-sm font-medium mb-1 block">
+              Price (₹) *
+            </label>
             <input
               type="number"
               required
@@ -142,13 +254,17 @@ const AddProduct = () => {
             />
           </div>
           <div>
-            <label className="text-sm font-medium mb-1 block">Discount (%)</label>
+            <label className="text-sm font-medium mb-1 block">
+              Discount (%)
+            </label>
             <input
               type="number"
               min="0"
               max="90"
               value={form.discount}
-              onChange={(e) => setForm({ ...form, discount: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, discount: e.target.value })
+              }
               placeholder="0"
               className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
             />
@@ -167,22 +283,29 @@ const AddProduct = () => {
           </div>
         </div>
 
-        {/* Shop Name */}
+        {/* Shop Name (auto-filled, read-only) */}
         <div>
-          <label className="text-sm font-medium mb-1 block">Shop Name</label>
+          <label className="text-sm font-medium mb-1 block">
+            Shop Name
+          </label>
           <input
             type="text"
             value={form.shopName}
-            onChange={(e) => setForm({ ...form, shopName: e.target.value })}
-            placeholder="e.g. Tech World"
-            className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
+            readOnly
+            className="w-full p-3 rounded-xl border border-gray-200 bg-bg text-sm text-muted cursor-not-allowed"
           />
+          <p className="text-[10px] text-muted mt-1">
+            Auto-filled from your shop
+          </p>
         </div>
 
         {/* Images */}
         <div>
           <label className="text-sm font-medium mb-1 block">
-            Image URLs * <span className="text-muted font-normal">(paste link and click +)</span>
+            Image URLs *{" "}
+            <span className="text-muted font-normal">
+              (paste link and click +)
+            </span>
           </label>
 
           <div className="flex gap-2">
@@ -211,8 +334,15 @@ const AddProduct = () => {
           {form.images.length > 0 && (
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mt-3">
               {form.images.map((img, i) => (
-                <div key={i} className="relative aspect-square rounded-xl overflow-hidden group">
-                  <img src={img} alt="" className="w-full h-full object-cover" />
+                <div
+                  key={i}
+                  className="relative aspect-square rounded-xl overflow-hidden group"
+                >
+                  <img
+                    src={img}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
                   <button
                     type="button"
                     onClick={() => removeImage(i)}

@@ -29,12 +29,33 @@ const deliveryPartnerSchema = new mongoose.Schema(
     panCard: { type: String, required: true },
     selfie: { type: String, required: true },
 
-    // Bank Details
+    // ============================================
+    // 🏦 BANK DETAILS (UPDATED)
+    // ============================================
     bankAccount: {
-      accountNumber: { type: String, required: true },
-      ifscCode: { type: String, required: true, uppercase: true },
-      accountHolderName: { type: String, required: true },
-      bankName: String,
+      accountNumber: { type: String, default: "" },
+      ifscCode: { type: String, default: "", uppercase: true },
+      accountHolderName: { type: String, default: "" },
+      bankName: { type: String, default: "" },
+      // Verification fields
+      isVerified: { type: Boolean, default: false },
+      verifiedAt: Date,
+      verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      rejectionReason: { type: String, default: "" },
+      rejectedAt: Date,
+    },
+
+    // ============================================
+    // 📱 UPI DETAILS (NEW)
+    // ============================================
+    upiDetails: {
+      upiId: { type: String, default: "" },
+      qrCodeUrl: { type: String, default: "" },
+      isVerified: { type: Boolean, default: false },
+      verifiedAt: Date,
+      verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      rejectionReason: { type: String, default: "" },
+      rejectedAt: Date,
     },
 
     // Vehicle Info
@@ -72,12 +93,85 @@ const deliveryPartnerSchema = new mongoose.Schema(
     totalEarnings: { type: Number, default: 0 },
     rating: { type: Number, default: 0 },
 
+    // ============================================
+    // 💰 WALLET & EARNINGS
+    // ============================================
+    walletBalance: {
+      type: Number,
+      default: 0,
+    },
+    totalWithdrawn: {
+      type: Number,
+      default: 0,
+    },
+    cashInHand: {
+      type: Number,
+      default: 0,
+    },
+    platformDues: {
+      type: Number,
+      default: 0,
+    },
+
+    // Transaction History
+    transactions: [
+      {
+        type: {
+          type: String,
+          enum: [
+            "DELIVERY_EARNING",
+            "CASH_COLLECTED",
+            "PLATFORM_DUES",
+            "CASH_SETTLED",
+            "PAYOUT",
+            "BONUS",
+            "PENALTY",
+            "ADJUSTMENT",
+          ],
+          required: true,
+        },
+        amount: {
+          type: Number,
+          required: true,
+        },
+        orderId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Order",
+        },
+        orderNumber: String,
+        description: String,
+        status: {
+          type: String,
+          enum: ["PENDING", "COMPLETED", "FAILED"],
+          default: "COMPLETED",
+        },
+        at: { type: Date, default: Date.now },
+      },
+    ],
+
+    // Cash Settlements (COD)
+    cashSettlements: [
+      {
+        amount: { type: Number, required: true },
+        method: {
+          type: String,
+          enum: ["CASH", "UPI", "BANK_TRANSFER"],
+          default: "CASH",
+        },
+        reference: String,
+        settledBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        at: { type: Date, default: Date.now },
+      },
+    ],
+
     // Availability
     isAvailable: { type: Boolean, default: false },
     lastActiveAt: { type: Date, default: Date.now },
 
     // 🌍 Live Location (GeoJSON)
-    // Default: [0, 0] — partner online hone pe update hoga
     currentLocation: {
       type: {
         type: String,
@@ -86,14 +180,14 @@ const deliveryPartnerSchema = new mongoose.Schema(
       },
       coordinates: {
         type: [Number],
-        default: [0, 0],   // [longitude, latitude]
+        default: [0, 0],
       },
     },
   },
   { timestamps: true }
 );
 
-// 🌍 Geo index — nearby delivery partners ke liye
+// 🌍 Geo index
 deliveryPartnerSchema.index({ currentLocation: "2dsphere" });
 
 const DeliveryPartner = mongoose.model("DeliveryPartner", deliveryPartnerSchema);

@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import {
   FiUpload, FiX, FiCheck, FiTruck,
   FiUser, FiCreditCard, FiMapPin, FiInfo,
+  FiSmartphone,
 } from "react-icons/fi";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -32,6 +33,7 @@ const BecomePartner = () => {
     ifscCode: "",
     accountHolderName: "",
     bankName: "",
+    upiId: "", // 🆕
     vehicleType: "BIKE",
     vehicleNumber: "",
     vehicleModel: "",
@@ -47,6 +49,7 @@ const BecomePartner = () => {
     panCard: null,
     selfie: null,
     rcDocument: null,
+    upiQr: null, // 🆕
   });
 
   // Check existing application
@@ -81,6 +84,12 @@ const BecomePartner = () => {
       !form.ifscCode
     ) {
       setError("Please fill all required fields");
+      return;
+    }
+
+    // 🆕 UPI validation
+    if (!form.upiId || !form.upiId.includes("@")) {
+      setError("Valid UPI ID daalein (e.g. name@paytm)");
       return;
     }
 
@@ -346,68 +355,110 @@ const BecomePartner = () => {
           </div>
         )}
 
-        {/* STEP 3 — Bank & Vehicle */}
+        {/* STEP 3 — Bank, UPI & Vehicle */}
         {step === 3 && (
           <div className="space-y-4">
             <h2 className="font-heading font-bold text-lg flex items-center gap-2 mb-4">
-              <FiMapPin className="text-primary" /> Bank & Vehicle Details
+              <FiMapPin className="text-primary" /> Bank, UPI & Vehicle Details
             </h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                placeholder="Bank Account Number *"
-                value={form.accountNumber}
-                onChange={(e) => setForm({ ...form, accountNumber: e.target.value })}
-                className="p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
-              />
-              <input
-                placeholder="IFSC Code *"
-                value={form.ifscCode}
-                onChange={(e) =>
-                  setForm({ ...form, ifscCode: e.target.value.toUpperCase() })
-                }
-                className="p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
-              />
-              <input
-                placeholder="Account Holder Name"
-                value={form.accountHolderName}
-                onChange={(e) =>
-                  setForm({ ...form, accountHolderName: e.target.value })
-                }
-                className="p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
-              />
-              <input
-                placeholder="Bank Name"
-                value={form.bankName}
-                onChange={(e) => setForm({ ...form, bankName: e.target.value })}
-                className="p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
-              />
+            {/* 🏦 Bank Details */}
+            <div>
+              <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+                🏦 Bank Account
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  placeholder="Bank Account Number *"
+                  value={form.accountNumber}
+                  onChange={(e) => setForm({ ...form, accountNumber: e.target.value })}
+                  className="p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
+                />
+                <input
+                  placeholder="IFSC Code *"
+                  value={form.ifscCode}
+                  onChange={(e) =>
+                    setForm({ ...form, ifscCode: e.target.value.toUpperCase() })
+                  }
+                  className="p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
+                />
+                <input
+                  placeholder="Account Holder Name"
+                  value={form.accountHolderName}
+                  onChange={(e) =>
+                    setForm({ ...form, accountHolderName: e.target.value })
+                  }
+                  className="p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
+                />
+                <input
+                  placeholder="Bank Name"
+                  value={form.bankName}
+                  onChange={(e) => setForm({ ...form, bankName: e.target.value })}
+                  className="p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
+                />
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <select
-                value={form.vehicleType}
-                onChange={(e) => setForm({ ...form, vehicleType: e.target.value })}
-                className="p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
-              >
-                <option value="BIKE">Bike</option>
-                <option value="SCOOTER">Scooter</option>
-                <option value="CYCLE">Cycle</option>
-                <option value="CAR">Car</option>
-                <option value="WALK">Walk</option>
-              </select>
+            {/* 🆕 UPI Details */}
+            <div className="p-4 rounded-xl bg-blue-50 border-2 border-blue-200">
+              <p className="text-sm font-semibold mb-3 flex items-center gap-2 text-blue-800">
+                <FiSmartphone /> UPI Details (Payout ke liye zaroori)
+              </p>
+
               <input
-                placeholder="Vehicle Number"
-                value={form.vehicleNumber}
+                placeholder="UPI ID * (e.g. name@paytm, name@ybl)"
+                value={form.upiId}
                 onChange={(e) =>
-                  setForm({ ...form, vehicleNumber: e.target.value.toUpperCase() })
+                  setForm({ ...form, upiId: e.target.value.toLowerCase().trim() })
                 }
-                className="p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
+                className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm mb-3"
               />
+
+              <div>
+                <p className="text-xs font-medium mb-1 text-blue-800">
+                  UPI QR Code (Optional)
+                </p>
+                <FileUpload
+                  label=""
+                  file={files.upiQr}
+                  onChange={(f) => handleFile("upiQr", f)}
+                />
+              </div>
+
+              <p className="text-[10px] text-blue-700 mt-2">
+                💡 Aapka payout isi UPI pe bheja jayega. Verify hone ke baad hi
+                active hoga.
+              </p>
+            </div>
+
+            {/* 🚗 Vehicle */}
+            <div>
+              <p className="text-sm font-semibold mb-2">🚗 Vehicle Details</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <select
+                  value={form.vehicleType}
+                  onChange={(e) => setForm({ ...form, vehicleType: e.target.value })}
+                  className="p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
+                >
+                  <option value="BIKE">Bike</option>
+                  <option value="SCOOTER">Scooter</option>
+                  <option value="CYCLE">Cycle</option>
+                  <option value="CAR">Car</option>
+                  <option value="WALK">Walk</option>
+                </select>
+                <input
+                  placeholder="Vehicle Number"
+                  value={form.vehicleNumber}
+                  onChange={(e) =>
+                    setForm({ ...form, vehicleNumber: e.target.value.toUpperCase() })
+                  }
+                  className="p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm"
+                />
+              </div>
             </div>
 
             {/* Address */}
-            <h3 className="font-semibold text-sm pt-2">Address</h3>
+            <h3 className="font-semibold text-sm pt-2">📍 Address</h3>
             <input
               placeholder="Address Line"
               value={form.line1}
@@ -460,7 +511,7 @@ const BecomePartner = () => {
 // File Upload Component
 const FileUpload = ({ label, file, onChange }) => (
   <div>
-    <p className="text-xs font-medium mb-1">{label}</p>
+    {label && <p className="text-xs font-medium mb-1">{label}</p>}
     {file ? (
       <div className="relative rounded-xl overflow-hidden border-2 border-accent bg-green-50 p-3 text-center">
         <FiCheck className="text-accent text-2xl mx-auto mb-1" />

@@ -14,6 +14,8 @@ import reviewRoutes from "./routes/review.routes.js";
 import deliveryRoutes from "./routes/delivery.routes.js";
 import deliveryPartnerRoutes from "./routes/deliveryPartner.routes.js";
 import couponRoutes from "./routes/coupon.routes.js";
+import sellerRoutes from "./routes/seller.routes.js";
+import settingsRoutes from "./routes/settings.routes.js";
 
 import { errorHandler, notFound } from "./middlewares/error.middleware.js";
 import {
@@ -70,6 +72,8 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/delivery", deliveryRoutes);
 app.use("/api/delivery-partners", deliveryPartnerRoutes);
 app.use("/api/coupons", couponRoutes);
+app.use("/api/seller", sellerRoutes);
+app.use("/api/settings", settingsRoutes);
 
 // ——— Debug ———
 console.log("🔍 Routes registered:");
@@ -83,6 +87,8 @@ console.log("   /api/reviews/*");
 console.log("   /api/delivery/*");
 console.log("   /api/delivery-partners/*");
 console.log("   /api/coupons/*");
+console.log("   /api/seller/*");
+console.log("   /api/settings/*");
 
 // ——— Error Handling ———
 app.use(notFound);

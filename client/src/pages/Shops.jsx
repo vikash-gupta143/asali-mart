@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { FiMapPin, FiStar, FiNavigation } from "react-icons/fi";
 import { fetchAllShops, fetchNearbyShops } from "../services/shopService";
-import { useLocation } from "../hooks/useLocation";
+import { useLocation } from "../context/LocationContext";
+
 
 const Shops = () => {
   const { location, detectLocation } = useLocation();

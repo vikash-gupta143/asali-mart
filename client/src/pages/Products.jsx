@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { FiFilter } from "react-icons/fi";
+import { FiFilter, FiTruck } from "react-icons/fi";
 import ProductCard from "../components/common/ProductCard";
 import FilterSidebar from "../components/common/FilterSidebar";
+import DeliveryBanner from "../components/common/DeliveryBanner";
 import { fetchProducts } from "../services/productService";
 import { fetchNearbyProducts } from "../services/shopService";
-import { useLocation } from "../hooks/useLocation";
+import { useLocation } from "../context/LocationContext";
+import { useDeliveryInfo } from "../hooks/useDeliveryInfo";
 
 const categoriesList = [
   { id: 1, name: "Electronics", icon: "📱", color: "#E3F2FD" },
@@ -27,14 +29,22 @@ const Products = () => {
   const [sortBy, setSortBy] = useState("popular");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  // 🆕 Nearby
+  // 🆕 Location + Nearby
   const { location, detectLocation } = useLocation();
   const [nearbyOnly, setNearbyOnly] = useState(false);
   const [radius, setRadius] = useState(5);
 
+  // 🚚 Dynamic delivery info
+  const deliveryInfo = useDeliveryInfo();
+
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // 🆕 Auto-set radius based on time window
+  useEffect(() => {
+    setRadius(deliveryInfo.maxRadius);
+  }, [deliveryInfo.maxRadius]);
 
   useEffect(() => {
     const load = async () => {
@@ -45,7 +55,7 @@ const Products = () => {
         let data;
 
         if (nearbyOnly && location) {
-          // 🆕 Nearby products
+          // 🆕 Nearby products — dynamic radius
           data = await fetchNearbyProducts(location.lat, location.lng, radius, {
             category: selectedCategory !== "All" ? selectedCategory : undefined,
           });
@@ -74,7 +84,6 @@ const Products = () => {
 
   const handleNearbyToggle = () => {
     if (!location) {
-      // Auto detect location
       detectLocation();
       setNearbyOnly(true);
     } else {
@@ -82,9 +91,33 @@ const Products = () => {
     }
   };
 
+  // 🎨 Time window ke hisaab se color
+  const windowColors = {
+    day: {
+      bg: "bg-orange-50 border-orange-200",
+      text: "text-orange-700",
+      icon: "text-orange-500",
+    },
+    evening: {
+      bg: "bg-purple-50 border-purple-200",
+      text: "text-purple-700",
+      icon: "text-purple-500",
+    },
+    night: {
+      bg: "bg-blue-50 border-blue-200",
+      text: "text-blue-700",
+      icon: "text-blue-500",
+    },
+  };
+
+  const colors = windowColors[deliveryInfo.window];
+
   return (
     <div className="container-custom py-6">
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+      {/* 🚚 Delivery Banner */}
+      <DeliveryBanner />
+
+      <div className="flex items-center justify-between my-5 flex-wrap gap-3">
         <div>
           <h1 className="font-heading font-bold text-2xl">
             {nearbyOnly ? "Nearby Products" : "All Products"}
@@ -112,18 +145,28 @@ const Products = () => {
             📍 Nearby Only
           </button>
 
-          {/* 🆕 Radius selector — only when nearby */}
+          {/* 🆕 Radius selector — dynamic based on time */}
           {nearbyOnly && location && (
-            <select
-              value={radius}
-              onChange={(e) => setRadius(Number(e.target.value))}
-              className="px-3 py-2 rounded-xl bg-white shadow-card text-sm outline-none"
+            <div
+              className={`flex items-center gap-1 px-3 py-2 rounded-xl border-2 ${colors.bg}`}
             >
-              <option value={2}>2 km</option>
-              <option value={5}>5 km</option>
-              <option value={10}>10 km</option>
-              <option value={20}>20 km</option>
-            </select>
+              <FiTruck className={colors.icon} />
+              <select
+                value={radius}
+                onChange={(e) => setRadius(Number(e.target.value))}
+                className={`bg-transparent text-sm font-semibold outline-none ${colors.text}`}
+              >
+                {deliveryInfo.maxRadius >= 10 && (
+                  <option value={10}>10 km</option>
+                )}
+                {deliveryInfo.maxRadius >= 5 && (
+                  <option value={5}>5 km</option>
+                )}
+                {deliveryInfo.maxRadius >= 2 && (
+                  <option value={2}>2 km</option>
+                )}
+              </select>
+            </div>
           )}
 
           <button
@@ -176,7 +219,10 @@ const Products = () => {
               ⚠️ {error}
             </div>
           ) : products.length === 0 ? (
-            <EmptyState nearbyOnly={nearbyOnly} />
+            <EmptyState
+              nearbyOnly={nearbyOnly}
+              maxRadius={deliveryInfo.maxRadius}
+            />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {products.map((p) => (
@@ -201,7 +247,7 @@ const SkeletonCard = () => (
   </div>
 );
 
-const EmptyState = ({ nearbyOnly }) => (
+const EmptyState = ({ nearbyOnly, maxRadius }) => (
   <div className="bg-white rounded-xl shadow-card p-12 text-center">
     <div className="text-6xl mb-4">🔍</div>
     <h3 className="font-heading font-bold text-lg mb-2">
@@ -209,7 +255,7 @@ const EmptyState = ({ nearbyOnly }) => (
     </h3>
     <p className="text-sm text-muted">
       {nearbyOnly
-        ? "Try increasing the radius or disable Nearby Only"
+        ? `Abhi ${maxRadius} km tak ke products nahi mile. Radius kam karein ya Nearby Only off karein.`
         : "Try changing filters or price range"}
     </p>
   </div>

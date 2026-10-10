@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   FiDollarSign, FiTrendingUp, FiShoppingBag,
-  FiBarChart2, FiAward,
+  FiBarChart2, FiAward, FiTruck, FiPercent,
 } from "react-icons/fi";
 import { fetchRevenueAnalytics } from "../../services/adminService";
 
@@ -28,26 +28,26 @@ const AdminRevenue = () => {
 
   const cards = [
     {
-      label: "Total Revenue",
-      value: `₹${data.total.toLocaleString()}`,
+      label: "Total Sales",
+      value: `₹${(data.total || 0).toLocaleString()}`,
       icon: FiDollarSign,
       color: "bg-primary/10 text-primary",
     },
     {
-      label: "Platform Commission",
-      value: `₹${data.commission.toLocaleString()}`,
+      label: "Platform Revenue",
+      value: `₹${(data.platformRevenue || 0).toLocaleString()}`,
       icon: FiAward,
       color: "bg-green-50 text-green-600",
     },
     {
-      label: "Seller Earnings",
-      value: `₹${data.sellerEarnings.toLocaleString()}`,
+      label: "Seller Payouts",
+      value: `₹${(data.sellerEarnings || 0).toLocaleString()}`,
       icon: FiTrendingUp,
       color: "bg-blue-50 text-blue-600",
     },
     {
       label: "Delivered Orders",
-      value: data.deliveredOrders,
+      value: data.deliveredOrders || 0,
       icon: FiShoppingBag,
       color: "bg-purple-50 text-purple-600",
     },
@@ -79,24 +79,106 @@ const AdminRevenue = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-gradient-to-br from-primary to-primary-light rounded-2xl p-6 text-white">
           <FiBarChart2 className="text-2xl mb-2 opacity-80" />
-          <p className="text-xs opacity-80 uppercase tracking-wider">This Month</p>
+          <p className="text-xs opacity-80 uppercase tracking-wider">
+            This Month
+          </p>
           <p className="font-heading font-bold text-3xl mt-1">
-            ₹{data.thisMonth.toLocaleString()}
+            ₹{(data.thisMonth || 0).toLocaleString()}
           </p>
         </div>
 
         <div className="bg-gradient-to-br from-secondary to-[#2a2a4e] rounded-2xl p-6 text-white">
           <FiBarChart2 className="text-2xl mb-2 opacity-80" />
-          <p className="text-xs opacity-80 uppercase tracking-wider">This Week</p>
+          <p className="text-xs opacity-80 uppercase tracking-wider">
+            This Week
+          </p>
           <p className="font-heading font-bold text-3xl mt-1">
-            ₹{data.thisWeek.toLocaleString()}
+            ₹{(data.thisWeek || 0).toLocaleString()}
           </p>
         </div>
       </div>
 
-      {/* Breakdown */}
+      {/* 🏢 Platform Revenue Breakdown */}
       <div className="bg-white rounded-xl shadow-card p-5">
-        <h2 className="font-heading font-bold mb-4">Revenue Breakdown</h2>
+        <h2 className="font-heading font-bold mb-4">
+          🏢 Platform Revenue Breakdown
+        </h2>
+        <div className="space-y-3">
+          {/* Commission */}
+          <div className="flex justify-between items-center p-3 rounded-lg bg-bg">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
+                <FiPercent />
+              </div>
+              <div>
+                <p className="font-medium text-sm">Seller Commission</p>
+                <p className="text-xs text-muted">
+                  5% of product price
+                </p>
+              </div>
+            </div>
+            <p className="font-bold text-green-600">
+              ₹{(data.commission || 0).toLocaleString()}
+            </p>
+          </div>
+
+          {/* Delivery Margin */}
+          <div className="flex justify-between items-center p-3 rounded-lg bg-bg">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                <FiTruck />
+              </div>
+              <div>
+                <p className="font-medium text-sm">Delivery Margin</p>
+                <p className="text-xs text-muted">
+                  20% of delivery charge
+                </p>
+              </div>
+            </div>
+            <p className="font-bold text-blue-600">
+              ₹{(data.deliveryMargin || 0).toLocaleString()}
+            </p>
+          </div>
+
+          {/* Platform Fee */}
+          <div className="flex justify-between items-center p-3 rounded-lg bg-bg">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                <FiDollarSign />
+              </div>
+              <div>
+                <p className="font-medium text-sm">Platform Fee</p>
+                <p className="text-xs text-muted">₹10 per order</p>
+              </div>
+            </div>
+            <p className="font-bold text-purple-600">
+              ₹{(data.platformFee || 0).toLocaleString()}
+            </p>
+          </div>
+
+          {/* Total Platform Revenue */}
+          <div className="flex justify-between items-center p-3 rounded-lg bg-accent/10 border-2 border-accent/20">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-accent text-white flex items-center justify-center">
+                <FiAward />
+              </div>
+              <div>
+                <p className="font-bold text-sm">Total Platform Revenue</p>
+                <p className="text-xs text-muted">
+                  Commission + Margin + Fee
+                </p>
+              </div>
+            </div>
+            <p className="font-bold text-accent text-lg">
+              ₹{(data.platformRevenue || 0).toLocaleString()}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 💵 Business Summary */}
+      <div className="bg-white rounded-xl shadow-card p-5">
+        <h2 className="font-heading font-bold mb-4">💵 Business Summary</h2>
         <div className="space-y-3">
           <div className="flex justify-between items-center p-3 rounded-lg bg-bg">
             <div className="flex items-center gap-3">
@@ -104,27 +186,14 @@ const AdminRevenue = () => {
                 <FiDollarSign />
               </div>
               <div>
-                <p className="font-medium text-sm">Total Sales</p>
-                <p className="text-xs text-muted">All delivered orders</p>
+                <p className="font-medium text-sm">Total Customer Payments</p>
+                <p className="text-xs text-muted">
+                  Products + Delivery + Fee
+                </p>
               </div>
             </div>
             <p className="font-bold text-primary">
-              ₹{data.total.toLocaleString()}
-            </p>
-          </div>
-
-          <div className="flex justify-between items-center p-3 rounded-lg bg-bg">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-green-100 text-green-600 flex items-center justify-center">
-                <FiAward />
-              </div>
-              <div>
-                <p className="font-medium text-sm">AsaliMart Commission</p>
-                <p className="text-xs text-muted">5% platform fee</p>
-              </div>
-            </div>
-            <p className="font-bold text-green-600">
-              ₹{data.commission.toLocaleString()}
+              ₹{(data.total || 0).toLocaleString()}
             </p>
           </div>
 
@@ -135,11 +204,30 @@ const AdminRevenue = () => {
               </div>
               <div>
                 <p className="font-medium text-sm">Seller Payouts</p>
-                <p className="text-xs text-muted">After commission</p>
+                <p className="text-xs text-muted">
+                  Product price - 5% commission
+                </p>
               </div>
             </div>
             <p className="font-bold text-blue-600">
-              ₹{data.sellerEarnings.toLocaleString()}
+              ₹{(data.sellerEarnings || 0).toLocaleString()}
+            </p>
+          </div>
+
+          <div className="flex justify-between items-center p-3 rounded-lg bg-bg">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center">
+                <FiTruck />
+              </div>
+              <div>
+                <p className="font-medium text-sm">Delivery Partner Payouts</p>
+                <p className="text-xs text-muted">
+                  80% of delivery charge
+                </p>
+              </div>
+            </div>
+            <p className="font-bold text-orange-600">
+              ₹{(data.deliveryEarnings || 0).toLocaleString()}
             </p>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import api from "../services/api";
+import { useLocation } from "./LocationContext";
 
 const AuthContext = createContext();
 
@@ -10,6 +11,9 @@ export const AuthProvider = ({ children }) => {
   });
   const [loading, setLoading] = useState(false);
 
+  // 🌍 Location hook
+  const { autoDetectLocation, location } = useLocation();
+
   useEffect(() => {
     if (user) {
       localStorage.setItem("asali_user", JSON.stringify(user));
@@ -18,12 +22,31 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user]);
 
+  // 🌍 Helper — auto-detect location (agar pehle se nahi hai)
+  const tryAutoDetectLocation = async () => {
+    // Agar location already saved hai — skip
+    if (location || localStorage.getItem("asali_location")) {
+      return;
+    }
+
+    try {
+      await autoDetectLocation();
+      console.log("✅ Location auto-detected");
+    } catch (err) {
+      console.log("⚠️ Location auto-detect skipped:", err);
+    }
+  };
+
   const register = async (data) => {
     setLoading(true);
     try {
       const res = await api.post("/auth/register", data);
       localStorage.setItem("asali_token", res.data.token);
       setUser(res.data.user);
+
+      // 🌍 Auto-detect location after signup
+      await tryAutoDetectLocation();
+
       return { success: true, user: res.data.user };
     } catch (error) {
       return {
@@ -41,6 +64,10 @@ export const AuthProvider = ({ children }) => {
       const res = await api.post("/auth/login", { email, password });
       localStorage.setItem("asali_token", res.data.token);
       setUser(res.data.user);
+
+      // 🌍 Auto-detect location after login
+      await tryAutoDetectLocation();
+
       return { success: true, user: res.data.user };
     } catch (error) {
       return {

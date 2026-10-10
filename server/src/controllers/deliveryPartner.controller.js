@@ -30,6 +30,14 @@ export const registerDeliveryPartner = async (req, res, next) => {
       });
     }
 
+    // 🆕 UPI validation (compulsory)
+    if (!req.body.upiId || !req.body.upiId.includes("@")) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid UPI ID required (e.g. name@paytm)",
+      });
+    }
+
     // Check unique Aadhaar / PAN
     const existingAadhaar = await DeliveryPartner.findOne({
       aadhaarNumber: req.body.aadhaarNumber,
@@ -64,24 +72,39 @@ export const registerDeliveryPartner = async (req, res, next) => {
       aadhaarBack: req.files.aadhaarBack[0].path,
       panCard: req.files.panCard[0].path,
       selfie: req.files.selfie[0].path,
+
+      // 🏦 Bank Details
       bankAccount: {
         accountNumber: req.body.accountNumber,
         ifscCode: req.body.ifscCode?.toUpperCase(),
         accountHolderName: req.body.accountHolderName,
         bankName: req.body.bankName,
+        isVerified: false,
       },
+
+      // 🆕 UPI Details
+      upiDetails: {
+        upiId: req.body.upiId?.toLowerCase().trim() || "",
+        qrCodeUrl: req.files?.upiQr?.[0]?.path || "",
+        isVerified: false,
+      },
+
+      // 🚗 Vehicle
       vehicle: {
         type: req.body.vehicleType || "BIKE",
         number: req.body.vehicleNumber,
         model: req.body.vehicleModel,
         rcDocument: req.files?.rcDocument?.[0]?.path || null,
       },
+
+      // 📍 Address
       address: {
         line1: req.body.line1,
         city: req.body.city,
         state: req.body.state,
         pincode: req.body.pincode,
       },
+
       status: "PENDING",
     });
 
@@ -178,7 +201,6 @@ export const verifyApplication = async (req, res, next) => {
   }
 };
 
-
 // @desc    Update delivery partner live location
 // @route   PUT /api/delivery-partners/location
 // @access  Private (DELIVERY_PARTNER)
@@ -210,7 +232,7 @@ export const updateLocation = async (req, res, next) => {
 
     partner.currentLocation = {
       type: "Point",
-      coordinates: [Number(lng), Number(lat)],  // [lng, lat]
+      coordinates: [Number(lng), Number(lat)],
     };
     partner.lastActiveAt = new Date();
     if (typeof isAvailable === "boolean") {
@@ -282,7 +304,7 @@ export const getNearbyPartners = async (req, res, next) => {
             type: "Point",
             coordinates: [Number(lng), Number(lat)],
           },
-          $maxDistance: Number(radius) * 1000, // km → meters
+          $maxDistance: Number(radius) * 1000,
         },
       },
     })
@@ -293,6 +315,154 @@ export const getNearbyPartners = async (req, res, next) => {
       success: true,
       count: partners.length,
       partners,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================
+// 🆕 ADMIN — DELIVERY PARTNER BANK & UPI VERIFICATION
+// ============================================
+
+// @desc    Get delivery partner bank verifications
+// @route   GET /api/admin/delivery-bank-verifications
+// @access  Private (ADMIN)
+export const getDeliveryBankVerifications = async (req, res, next) => {
+  try {
+    const { status } = req.query;
+
+    let query = {
+      "bankAccount.accountNumber": { $ne: "" },
+    };
+
+    if (status === "VERIFIED") {
+      query["bankAccount.isVerified"] = true;
+    } else if (status === "PENDING") {
+      query["bankAccount.isVerified"] = false;
+    }
+
+    const partners = await DeliveryPartner.find(query)
+      .populate("user", "name email phone")
+      .sort({ "bankAccount.isVerified": 1, createdAt: -1 });
+
+    const totalPending = await DeliveryPartner.countDocuments({
+      "bankAccount.accountNumber": { $ne: "" },
+      "bankAccount.isVerified": false,
+    });
+
+    const totalVerified = await DeliveryPartner.countDocuments({
+      "bankAccount.accountNumber": { $ne: "" },
+      "bankAccount.isVerified": true,
+    });
+
+    // Map to include user info at top level
+    const mappedPartners = partners.map((p) => ({
+      _id: p._id,
+      name: p.user?.name || p.fullName,
+      fullName: p.fullName,
+      email: p.user?.email || p.email,
+      phone: p.user?.phone || p.phone,
+      bankDetails: {
+        accountNumber: p.bankAccount?.accountNumber,
+        ifscCode: p.bankAccount?.ifscCode,
+        accountHolderName: p.bankAccount?.accountHolderName,
+        bankName: p.bankAccount?.bankName,
+        isVerified: p.bankAccount?.isVerified,
+      },
+      upiDetails: p.upiDetails,
+    }));
+
+    res.json({
+      success: true,
+      count: mappedPartners.length,
+      partners: mappedPartners,
+      stats: {
+        totalPending,
+        totalVerified,
+        total: totalPending + totalVerified,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Verify delivery partner bank & UPI
+// @route   PUT /api/admin/delivery-bank-verifications/:partnerId/verify
+// @access  Private (ADMIN)
+export const verifyDeliveryBank = async (req, res, next) => {
+  try {
+    const partner = await DeliveryPartner.findById(req.params.partnerId);
+
+    if (!partner) {
+      return res.status(404).json({ success: false, message: "Partner not found" });
+    }
+
+    if (partner.bankAccount) {
+      partner.bankAccount.isVerified = true;
+      partner.bankAccount.verifiedAt = new Date();
+      partner.bankAccount.verifiedBy = req.user._id;
+    }
+
+    if (partner.upiDetails) {
+      partner.upiDetails.isVerified = true;
+      partner.upiDetails.verifiedAt = new Date();
+      partner.upiDetails.verifiedBy = req.user._id;
+    }
+
+    await partner.save();
+
+    res.json({
+      success: true,
+      message: "Bank & UPI verified",
+      partner,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Reject delivery partner bank & UPI
+// @route   PUT /api/admin/delivery-bank-verifications/:partnerId/reject
+// @access  Private (ADMIN)
+export const rejectDeliveryBank = async (req, res, next) => {
+  try {
+    const { reason } = req.body;
+    const partner = await DeliveryPartner.findById(req.params.partnerId);
+
+    if (!partner) {
+      return res.status(404).json({ success: false, message: "Partner not found" });
+    }
+
+    if (partner.bankAccount) {
+      partner.bankAccount = {
+        accountNumber: "",
+        ifscCode: "",
+        accountHolderName: "",
+        bankName: "",
+        isVerified: false,
+        rejectionReason: reason || "Invalid bank details",
+        rejectedAt: new Date(),
+      };
+    }
+
+    if (partner.upiDetails) {
+      partner.upiDetails = {
+        upiId: "",
+        qrCodeUrl: "",
+        isVerified: false,
+        rejectionReason: reason || "Invalid UPI details",
+        rejectedAt: new Date(),
+      };
+    }
+
+    await partner.save();
+
+    res.json({
+      success: true,
+      message: "Bank & UPI rejected. Partner will need to re-add.",
+      partner,
     });
   } catch (error) {
     next(error);

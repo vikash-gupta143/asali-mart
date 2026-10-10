@@ -31,6 +31,46 @@ const userSchema = new mongoose.Schema(
       enum: ["CUSTOMER", "SELLER", "ADMIN", "DELIVERY_PARTNER"],
       default: "CUSTOMER",
     },
+
+    // ============================================
+    // 💰 SELLER WALLET
+    // ============================================
+    wallet: {
+      available: { type: Number, default: 0 },
+      pending: { type: Number, default: 0 },
+      totalEarned: { type: Number, default: 0 },
+      totalWithdrawn: { type: Number, default: 0 },
+    },
+
+    // ============================================
+    // 🏦 BANK DETAILS
+    // ============================================
+    bankDetails: {
+      accountHolderName: { type: String, default: "" },
+      accountNumber: { type: String, default: "" },
+      ifscCode: { type: String, default: "", uppercase: true },
+      bankName: { type: String, default: "" },
+      branchName: { type: String, default: "" },
+      isVerified: { type: Boolean, default: false },
+      verifiedAt: Date,                                        // 🆕
+      verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // 🆕
+      rejectionReason: { type: String, default: "" },          // 🆕
+      rejectedAt: Date,                                        // 🆕
+    },
+
+    // ============================================
+    // 📱 UPI DETAILS (🆕)
+    // ============================================
+    upiDetails: {
+      upiId: { type: String, default: "" },
+      qrCodeUrl: { type: String, default: "" },
+      isVerified: { type: Boolean, default: false },
+      verifiedAt: Date,
+      verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      rejectionReason: { type: String, default: "" },
+      rejectedAt: Date,
+    },
+
     avatar: {
       type: String,
       default: "",
