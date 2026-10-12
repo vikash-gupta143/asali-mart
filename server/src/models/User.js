@@ -89,6 +89,14 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    // ============================================
+    // 🔔 FCM TOKEN (Push Notifications ke liye)
+    // ============================================
+    fcmToken: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true }
 );

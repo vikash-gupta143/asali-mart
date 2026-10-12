@@ -23,6 +23,16 @@ import {
   calculateDistance,
 } from "../config/delivery.config.js";
 
+// 💳 Razorpay Service Import
+import {
+  createRazorpayOrder,
+  verifyRazorpaySignature,
+  fetchPaymentDetails,
+} from "../services/razorpay.service.js";
+
+// 🔔 FCM Push Notification Helper
+import { sendNotificationToUser } from "../utils/sendNotification.js";
+
 // 🎲 OTP Generator — 4 digit
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -272,12 +282,24 @@ export const createOrder = async (req, res, next) => {
     if (paymentMode === "ONLINE" && req.body.paymentDetails) {
       paymentDetailsData = {
         method: "ONLINE",
-        status: "PENDING", // Admin verify karega
+        status: "PENDING",
         transactionId: req.body.paymentDetails.transactionId || "",
         screenshot: req.body.paymentDetails.screenshot || "",
         paidTo: req.body.paymentDetails.paidTo || "",
       };
     }
+
+   // 🆕 Razorpay payment — agar razorpay_payment_id aaya hai to PAID mark karo
+if (paymentMode === "ONLINE" && req.body.razorpay_payment_id) {
+  paymentDetailsData = {
+    method: "ONLINE",
+    status: "PAID",                                    // ✅ PAID mark karo
+    transactionId: req.body.razorpay_payment_id,
+    razorpayOrderId: req.body.razorpay_order_id || "",
+    paidAt: new Date(),
+  };
+  console.log(`✅ Order will be marked PAID directly (Razorpay payment_id: ${req.body.razorpay_payment_id})`);
+}
 
     const order = await Order.create({
       user: req.user._id,
@@ -292,7 +314,7 @@ export const createOrder = async (req, res, next) => {
       couponCode: appliedCouponCode,
       totalAmount,
       paymentMode: paymentMode || "COD",
-      paymentDetails: paymentDetailsData, // 🆕
+      paymentDetails: paymentDetailsData,
       orderStatus: "PLACED",
       deliveryType: chosenDeliveryType,
       deliveryPartner: null,
@@ -346,6 +368,21 @@ export const createOrder = async (req, res, next) => {
       });
     } catch (err) {
       console.error("Socket emit failed:", err.message);
+    }
+
+    // 🔔 PUSH NOTIFICATION (FCM) — Notify sellers
+    try {
+      const uniqueSellers = [...new Set(orderItems.map((i) => i.seller?.toString()).filter(Boolean))];
+      for (const sellerId of uniqueSellers) {
+        await sendNotificationToUser(
+          sellerId,
+          "🛒 New Order Received!",
+          `Order #${order.orderNumber} - ₹${order.totalAmount}`,
+          { orderId: order._id.toString(), type: "NEW_ORDER", link: "/seller/orders" }
+        );
+      }
+    } catch (notifErr) {
+      console.error("❌ Push notification failed:", notifErr.message);
     }
 
     res.status(201).json({
@@ -494,6 +531,21 @@ export const cancelOrder = async (req, res, next) => {
       console.error("Socket emit failed:", err.message);
     }
 
+    // 🔔 PUSH NOTIFICATION (FCM) — Notify sellers about cancellation
+    try {
+      const uniqueSellers = [...new Set(order.items.map((i) => i.seller?.toString()).filter(Boolean))];
+      for (const sellerId of uniqueSellers) {
+        await sendNotificationToUser(
+          sellerId,
+          "❌ Order Cancelled",
+          `Order #${order.orderNumber} has been cancelled by customer`,
+          { orderId: order._id.toString(), type: "ORDER_CANCELLED", link: "/seller/orders" }
+        );
+      }
+    } catch (notifErr) {
+      console.error("❌ Push notification failed:", notifErr.message);
+    }
+
     res.status(200).json({
       success: true,
       message: "Order cancelled successfully",
@@ -582,8 +634,13 @@ export const updateOrderStatus = async (req, res, next) => {
     }
 
     order.orderStatus = status;
-    if (status === "DELIVERED") order.deliveredAt = new Date();
-
+if (status === "DELIVERED") {
+  order.deliveredAt = new Date();
+  // 🆕 Return Window set karo (3 ghante)
+  order.returnDeadline = new Date(Date.now() + 3 * 60 * 60 * 1000);
+  order.returnStatus = "NONE";
+  console.log(`🔄 Return window set: ${order.returnDeadline.toISOString()} (3 hours)`);
+}
     if (
       status === "SHIPPED" &&
       order.deliveryOTP &&
@@ -651,6 +708,23 @@ export const updateOrderStatus = async (req, res, next) => {
       console.error("Socket emit failed:", err.message);
     }
 
+    // 🔔 PUSH NOTIFICATION (FCM) — Notify customer about status change
+    try {
+      await sendNotificationToUser(
+        order.user.toString(),
+        "📦 Order Status Updated",
+        `Order #${order.orderNumber} is now ${order.orderStatus.replace(/_/g, " ")}`,
+        {
+          orderId: order._id.toString(),
+          type: "ORDER_STATUS",
+          status: order.orderStatus,
+          link: `/orders/${order._id}`,
+        }
+      );
+    } catch (notifErr) {
+      console.error("❌ Push notification failed:", notifErr.message);
+    }
+
     res.status(200).json({
       success: true,
       message: "Order status updated",
@@ -699,11 +773,17 @@ export const sellerVerifyOTPAndDeliver = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Already delivered" });
     }
 
-    order.deliveryOTPVerified = true;
-    order.orderStatus = "DELIVERED";
-    order.deliveredAt = new Date();
+   order.deliveryOTPVerified = true;
+order.orderStatus = "DELIVERED";
+order.deliveredAt = new Date();
 
-    await order.save();
+// 🆕 Return Window set karo (3 ghante)
+order.returnDeadline = new Date(Date.now() + 3 * 60 * 60 * 1000);
+order.returnStatus = "NONE"; // Default status
+
+console.log(`🔄 Return window set: ${order.returnDeadline.toISOString()} (3 hours)`);
+
+await order.save();
 
     try {
       const uniqueSellers = [
@@ -754,6 +834,22 @@ export const sellerVerifyOTPAndDeliver = async (req, res, next) => {
       });
     } catch (err) {
       console.error("Socket emit failed:", err.message);
+    }
+
+    // 🔔 PUSH NOTIFICATION (FCM) — Notify customer about delivery
+    try {
+      await sendNotificationToUser(
+        order.user.toString(),
+        "✅ Order Delivered!",
+        `Order #${order.orderNumber} has been delivered successfully`,
+        {
+          orderId: order._id.toString(),
+          type: "ORDER_DELIVERED",
+          link: `/orders/${order._id}`,
+        }
+      );
+    } catch (notifErr) {
+      console.error("❌ Push notification failed:", notifErr.message);
     }
 
     res.status(200).json({
@@ -818,6 +914,125 @@ export const getOrderTracking = async (req, res, next) => {
         phone: order.deliveryPartner.phone,
       },
       lastUpdated: partner.lastActiveAt,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// ============================================================
+// 💳 RAZORPAY PAYMENT INTEGRATION
+// ============================================================
+
+// @desc    Create Razorpay order (before placing order)
+// @route   POST /api/orders/create-razorpay-order
+// @access  Private (CUSTOMER)
+export const createRazorpayOrderController = async (req, res, next) => {
+  try {
+    const { amount, receipt, notes } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid amount is required",
+      });
+    }
+
+    // 🆕 User ID aur email notes me add karein (webhook ke liye)
+    const enrichedNotes = {
+      ...notes,
+      userId: req.user._id.toString(),
+      userEmail: req.user.email,
+    };
+
+    const result = await createRazorpayOrder(
+      amount,
+      receipt || `receipt_${Date.now()}`,
+      enrichedNotes
+    );
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create Razorpay order",
+        error: result.message,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Razorpay order created",
+      order: result.order,
+      keyId: process.env.RAZORPAY_KEY_ID,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Verify Razorpay payment
+// @route   POST /api/orders/verify-payment
+// @access  Private (CUSTOMER)
+export const verifyRazorpayPayment = async (req, res, next) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing payment verification details",
+      });
+    }
+
+    // Step 1: Signature verify karo
+    const verification = verifyRazorpaySignature(
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    );
+
+    if (!verification.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed",
+      });
+    }
+
+    // Step 2: Payment details fetch karo (extra security)
+    const paymentResult = await fetchPaymentDetails(razorpay_payment_id);
+
+    if (!paymentResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch payment details",
+      });
+    }
+
+    const payment = paymentResult.payment;
+
+    // Step 3: Payment status check karo
+    if (payment.status !== "captured" && payment.status !== "authorized") {
+      return res.status(400).json({
+        success: false,
+        message: `Payment not successful. Status: ${payment.status}`,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Payment verified successfully",
+      payment: {
+        paymentId: payment.id,
+        orderId: payment.order_id,
+        amount: payment.amount / 100,
+        currency: payment.currency,
+        status: payment.status,
+        method: payment.method,
+        email: payment.email,
+        contact: payment.contact,
+        createdAt: payment.created_at,
+      },
     });
   } catch (error) {
     next(error);

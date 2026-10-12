@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   FiGrid, FiPackage, FiPlusCircle, FiShoppingBag,
   FiUsers, FiBarChart2, FiUser, FiLogOut, FiHome,
-  FiDollarSign, FiCreditCard,
+  FiDollarSign, FiCreditCard, FiRefreshCw,  // 🆕 FiRefreshCw add
 } from "react-icons/fi";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
@@ -21,10 +21,11 @@ const SellerLayout = () => {
     { name: "My Products", path: "/seller/products", icon: FiPackage },
     { name: "Add Product", path: "/seller/add-product", icon: FiPlusCircle },
     { name: "Orders", path: "/seller/orders", icon: FiShoppingBag },
+    { name: "Returns", path: "/seller/returns", icon: FiRefreshCw },  // 🆕 Returns link
     { name: "Earnings", path: "/seller/earnings", icon: FiDollarSign },
-    { name: "Wallet", path: "/seller/wallet", icon: FiCreditCard },  // 🆕
+    { name: "Wallet", path: "/seller/wallet", icon: FiCreditCard },
     { name: "Customers", path: "/seller/customers", icon: FiUsers },
-    { name: "Sales", path: "/seller/sales", icon: FiBarChart2 },
+   { name: "Sales Analytics", path: "/seller/analytics", icon: FiBarChart2 },
     { name: "Profile", path: "/seller/profile", icon: FiUser },
   ];
 
@@ -86,12 +87,45 @@ const SellerLayout = () => {
       );
     };
 
+    // 🆕 Return request notification
+    const handleNewReturn = (data) => {
+      console.log("🔔 New return:", data);
+      try {
+        const audio = new Audio("/notification.mp3");
+        audio.volume = 0.5;
+        audio.play().catch(() => {});
+      } catch (e) {}
+
+      toast.success(
+        (t) => (
+          <div
+            onClick={() => {
+              navigate("/seller/returns");
+              toast.dismiss(t.id);
+            }}
+            className="cursor-pointer"
+          >
+            <p className="font-bold text-sm">🔄 {data.message || "New return request!"}</p>
+            <p className="text-xs text-muted mt-1">
+              Order #{data.orderNumber}
+            </p>
+            <p className="text-xs text-primary font-semibold mt-1">
+              Click to review →
+            </p>
+          </div>
+        ),
+        { duration: 10000 }
+      );
+    };
+
     socket.on("order:new", handleNewOrder);
     socket.on("order:cancelled", handleCancelled);
+    socket.on("return:new", handleNewReturn);  // 🆕
 
     return () => {
       socket.off("order:new", handleNewOrder);
       socket.off("order:cancelled", handleCancelled);
+      socket.off("return:new", handleNewReturn);  // 🆕
     };
   }, [socket, navigate]);
 

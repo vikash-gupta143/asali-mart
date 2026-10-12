@@ -2,12 +2,15 @@ import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   FiArrowLeft, FiMapPin, FiPackage, FiX,
-  FiPhone, FiTruck, FiTag,
+  FiPhone, FiTruck, FiTag, FiStar,
 } from "react-icons/fi";
 import toast from "react-hot-toast";
 import { fetchOrderById, cancelOrderApi } from "../services/orderService";
 import { useSocket } from "../context/SocketContext";
 import LiveTrackingMap from "../components/common/LiveTrackingMap";
+import { FiRefreshCw, FiClock } from "react-icons/fi";
+import DeliveryRatingModal from "../components/delivery/DeliveryRatingModal";
+import api from "../services/api";
 
 const statusColors = {
   PLACED: "bg-blue-100 text-blue-700",
@@ -33,6 +36,9 @@ const OrderDetails = () => {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [existingRating, setExistingRating] = useState(null);
 
   const socket = useSocket();
 
@@ -51,6 +57,56 @@ const OrderDetails = () => {
     load();
   }, [id]);
 
+  // 🆕 Return window countdown timer
+  useEffect(() => {
+    if (!order?.returnDeadline) return;
+
+    const updateTimer = () => {
+      const now = new Date();
+      const deadline = new Date(order.returnDeadline);
+      const diff = deadline - now;
+
+      if (diff <= 0) {
+        setTimeRemaining(null);
+        return;
+      }
+
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      setTimeRemaining({ hours, minutes, seconds });
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [order]);
+
+  // 🆕 Check if already rated
+  useEffect(() => {
+    const checkRating = async () => {
+      if (
+        !order ||
+        order.orderStatus !== "DELIVERED" ||
+        !order.deliveryPartner
+      )
+        return;
+
+      try {
+        const res = await api.get(`/delivery-ratings/order/${order._id}`);
+        if (res.data.rating) {
+          setExistingRating(res.data.rating);
+        }
+      } catch (err) {
+        // No rating yet — koi issue nahi
+      }
+    };
+
+    checkRating();
+  }, [order]);
+
   // 🔔 Real-time order updates via Socket.io
   useEffect(() => {
     if (!socket || !order) return;
@@ -59,17 +115,13 @@ const OrderDetails = () => {
       if (data.orderId === id || data.orderId === order._id) {
         console.log("🔔 Order update:", data);
 
-        // Play sound
         try {
           const audio = new Audio("/notification.mp3");
           audio.volume = 0.4;
           audio.play().catch(() => {});
         } catch (e) {}
 
-        // Show toast
         toast.success(data.message, { duration: 5000 });
-
-        // Reload order details
         load();
       }
     };
@@ -114,6 +166,38 @@ const OrderDetails = () => {
     "CANCELLED",
   ].includes(order.orderStatus);
   const currentStep = statusSteps.indexOf(order.orderStatus);
+
+  // 🆕 Return window check
+  const isReturnWindowOpen =
+    order.orderStatus === "DELIVERED" &&
+    order.returnDeadline &&
+    new Date() < new Date(order.returnDeadline) &&
+    (!order.returnStatus || order.returnStatus === "NONE");
+
+  // 🆕 Return status text/color
+  const getReturnStatusDisplay = () => {
+    if (!order.returnStatus || order.returnStatus === "NONE") return null;
+
+    const statusMap = {
+      REQUESTED: { text: "🔄 Return Requested", color: "bg-yellow-100 text-yellow-700" },
+      APPROVED: { text: "✅ Return Approved", color: "bg-blue-100 text-blue-700" },
+      REJECTED: { text: "❌ Return Rejected", color: "bg-red-100 text-red-700" },
+      PICKUP_SCHEDULED: { text: "🚚 Pickup Scheduled", color: "bg-indigo-100 text-indigo-700" },
+      PICKED_UP: { text: "📦 Picked Up", color: "bg-purple-100 text-purple-700" },
+      RECEIVED: { text: "📥 Received by Seller", color: "bg-cyan-100 text-cyan-700" },
+      REFUND_INITIATED: { text: "💸 Refund Initiated", color: "bg-orange-100 text-orange-700" },
+      COMPLETED: { text: "🎉 Return Completed", color: "bg-green-100 text-green-700" },
+      DISPUTED: { text: "⚠️ Disputed", color: "bg-red-100 text-red-700" },
+    };
+
+    return statusMap[order.returnStatus] || null;
+  };
+
+  const returnStatusDisplay = getReturnStatusDisplay();
+
+  // 🆕 Payment status nikalo (dono fields se)
+  const actualPaymentStatus =
+    order.paymentDetails?.status || order.paymentStatus || "PENDING";
 
   return (
     <div className="container-custom py-6">
@@ -199,25 +283,166 @@ const OrderDetails = () => {
         </div>
       )}
 
+      {/* ⭐ RATING SECTION — Only for DELIVERED orders */}
+      {order.orderStatus === "DELIVERED" && order.deliveryPartner && (
+        <div className="bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-2xl p-5 mb-5">
+          {existingRating ? (
+            // Already rated
+            <div className="text-center">
+              <p className="text-xs font-bold text-yellow-800 uppercase tracking-wider mb-2">
+                ⭐ Your Rating
+              </p>
+              <div className="flex justify-center gap-1 mb-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <FiStar
+                    key={star}
+                    className={`text-2xl ${
+                      star <= existingRating.rating
+                        ? "text-yellow-400"
+                        : "text-gray-300"
+                    }`}
+                    style={{
+                      fill:
+                        star <= existingRating.rating ? "#fbbf24" : "transparent",
+                    }}
+                  />
+                ))}
+              </div>
+              {existingRating.feedback && (
+                <p className="text-xs text-gray-700 italic mt-2">
+                  "{existingRating.feedback}"
+                </p>
+              )}
+              <p className="text-[10px] text-gray-500 mt-2">
+                Rated on{" "}
+                {new Date(existingRating.createdAt).toLocaleDateString("en-IN")}
+              </p>
+            </div>
+          ) : (
+            // Not rated yet
+            <div className="text-center">
+              <p className="text-sm font-semibold text-yellow-800 mb-3">
+                🎉 Delivery complete! Rate your delivery partner
+              </p>
+              <button
+                onClick={() => setShowRatingModal(true)}
+                className="px-6 py-3 rounded-xl bg-yellow-500 text-white font-bold hover:bg-yellow-600 transition inline-flex items-center gap-2"
+              >
+                <FiStar /> Rate Delivery
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
-          {/* 🗺️ Live Tracking Map — Only when OUT_FOR_DELIVERY */}
-{order.orderStatus === "OUT_FOR_DELIVERY" &&
-  order.shippingAddress?.coordinates &&
-  order.pickupAddress?.coordinates && (
-    <LiveTrackingMap
-      orderId={order._id}
-      pickupCoords={{
-        lat: order.pickupAddress.coordinates[1],
-        lng: order.pickupAddress.coordinates[0],
-      }}
-      dropCoords={{
-        lat: order.shippingAddress.coordinates[1],
-        lng: order.shippingAddress.coordinates[0],
-      }}
-    />
-  )}
+      {/* 🔄 RETURN WINDOW + STATUS SECTION */}
+      {order.orderStatus === "DELIVERED" && (
+        <>
+          {/* Countdown Timer — agar window open hai */}
+          {isReturnWindowOpen && timeRemaining && (
+            <div className="bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-300 rounded-2xl p-5 mb-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-xl bg-orange-500 text-white flex items-center justify-center text-2xl">
+                  ⏰
+                </div>
+                <div className="flex-1">
+                  <p className="font-heading font-bold text-orange-900">
+                    Return Window Open!
+                  </p>
+                  <p className="text-xs text-orange-700">
+                    Koi issue hai? Abhi return request daalein
+                  </p>
+                </div>
+              </div>
 
+              {/* Timer Display */}
+              <div className="flex justify-center gap-2 mb-4">
+                <div className="bg-white rounded-xl px-4 py-2 text-center min-w-[60px]">
+                  <p className="font-heading font-bold text-2xl text-orange-600">
+                    {String(timeRemaining.hours).padStart(2, "0")}
+                  </p>
+                  <p className="text-[10px] text-muted uppercase">Hours</p>
+                </div>
+                <div className="bg-white rounded-xl px-4 py-2 text-center min-w-[60px]">
+                  <p className="font-heading font-bold text-2xl text-orange-600">
+                    {String(timeRemaining.minutes).padStart(2, "0")}
+                  </p>
+                  <p className="text-[10px] text-muted uppercase">Mins</p>
+                </div>
+                <div className="bg-white rounded-xl px-4 py-2 text-center min-w-[60px]">
+                  <p className="font-heading font-bold text-2xl text-orange-600">
+                    {String(timeRemaining.seconds).padStart(2, "0")}
+                  </p>
+                  <p className="text-[10px] text-muted uppercase">Secs</p>
+                </div>
+              </div>
 
+              {/* Return Button */}
+              <Link
+                to={`/return/${order._id}`}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-orange-500 text-white font-bold hover:bg-orange-600 transition"
+              >
+                <FiRefreshCw /> Return / Exchange Request
+              </Link>
+            </div>
+          )}
+
+          {/* Return Status Display — agar already requested hai */}
+          {returnStatusDisplay && (
+            <div className={`${returnStatusDisplay.color} rounded-2xl p-4 mb-5`}>
+              <div className="flex items-center gap-3">
+                <div className="text-2xl">
+                  {returnStatusDisplay.text.split(" ")[0]}
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-sm">
+                    {returnStatusDisplay.text.slice(2)}
+                  </p>
+                  {order.returnInfo?.refundAmount > 0 && (
+                    <p className="text-xs mt-0.5">
+                      Refund Amount: ₹{order.returnInfo.refundAmount}
+                    </p>
+                  )}
+                </div>
+                <Link
+                  to={`/returns/${order.returnInfo?.returnId}`}
+                  className="text-xs font-semibold underline"
+                >
+                  View Details →
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Return Window Closed — agar deadline khatam */}
+          {order.returnDeadline &&
+            new Date() > new Date(order.returnDeadline) &&
+            (!order.returnStatus || order.returnStatus === "NONE") && (
+              <div className="bg-gray-100 border border-gray-200 rounded-2xl p-4 mb-5 text-center">
+                <p className="text-sm text-muted">
+                  ❌ Return window (3 ghante) khatam ho gayi
+                </p>
+              </div>
+            )}
+        </>
+      )}
+
+      {/* 🗺️ Live Tracking Map — Only when OUT_FOR_DELIVERY */}
+      {order.orderStatus === "OUT_FOR_DELIVERY" &&
+        order.shippingAddress?.coordinates &&
+        order.pickupAddress?.coordinates && (
+          <LiveTrackingMap
+            orderId={order._id}
+            pickupCoords={{
+              lat: order.pickupAddress.coordinates[1],
+              lng: order.pickupAddress.coordinates[0],
+            }}
+            dropCoords={{
+              lat: order.shippingAddress.coordinates[1],
+              lng: order.shippingAddress.coordinates[0],
+            }}
+          />
+        )}
 
       {/* Progress */}
       {order.orderStatus !== "CANCELLED" && (
@@ -339,12 +564,38 @@ const OrderDetails = () => {
             </div>
           </div>
 
+          {/* 💳 Payment Section */}
           <div className="bg-white rounded-xl shadow-card p-5">
             <h3 className="font-heading font-bold mb-2 text-sm">Payment</h3>
             <p className="text-sm">{order.paymentMode}</p>
-            <p className="text-xs text-muted mt-1">
-              Status: {order.paymentStatus}
-            </p>
+
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs text-muted">Status:</span>
+              <span
+                className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+                  actualPaymentStatus === "PAID"
+                    ? "bg-green-100 text-green-700"
+                    : actualPaymentStatus === "FAILED"
+                    ? "bg-red-100 text-red-700"
+                    : "bg-yellow-100 text-yellow-700"
+                }`}
+              >
+                {actualPaymentStatus === "PAID" ? "✅ PAID" : actualPaymentStatus}
+              </span>
+            </div>
+
+            {order.paymentDetails?.transactionId && (
+              <p className="text-[10px] text-muted mt-2 font-mono break-all">
+                Txn: {order.paymentDetails.transactionId}
+              </p>
+            )}
+
+            {order.paymentDetails?.paidAt && (
+              <p className="text-[10px] text-muted mt-1">
+                Paid:{" "}
+                {new Date(order.paymentDetails.paidAt).toLocaleString("en-IN")}
+              </p>
+            )}
           </div>
 
           {canCancel && (
@@ -358,6 +609,18 @@ const OrderDetails = () => {
           )}
         </div>
       </div>
+
+      {/* ⭐ Rating Modal */}
+      {showRatingModal && (
+        <DeliveryRatingModal
+          order={order}
+          onClose={() => setShowRatingModal(false)}
+          onSuccess={() => {
+            setShowRatingModal(false);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 };

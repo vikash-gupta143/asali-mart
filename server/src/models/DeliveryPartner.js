@@ -88,6 +88,35 @@ const deliveryPartnerSchema = new mongoose.Schema(
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     approvedAt: Date,
 
+    // ⭐ Rating System
+rating: {
+  type: Number,
+  default: 0,
+  min: 0,
+  max: 5,
+},
+totalRatings: {
+  type: Number,
+  default: 0,
+},
+ratingBreakdown: {
+  5: { type: Number, default: 0 },
+  4: { type: Number, default: 0 },
+  3: { type: Number, default: 0 },
+  2: { type: Number, default: 0 },
+  1: { type: Number, default: 0 },
+},
+
+// 🎯 Performance Metrics
+totalDeliveries: {
+  type: Number,
+  default: 0,
+},
+totalReturns: {
+  type: Number,
+  default: 0,
+},
+
     // Stats
     totalDeliveries: { type: Number, default: 0 },
     totalEarnings: { type: Number, default: 0 },

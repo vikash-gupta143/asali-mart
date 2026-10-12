@@ -8,12 +8,19 @@ import {
   updateOrderStatus,
   sellerVerifyOTPAndDeliver,
   getOrderTracking,
+  // 💳 Razorpay Controllers
+  createRazorpayOrderController,
+  verifyRazorpayPayment,
 } from "../controllers/order.controller.js";
 import { protect, authorize } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
+// 💳 Razorpay Routes — MUST be before /:id routes
+router.post("/create-razorpay-order", protect, createRazorpayOrderController);
+router.post("/verify-payment", protect, verifyRazorpayPayment);
 
+// 📦 Order Routes
 router.post("/", protect, createOrder);
 router.get("/my-orders", protect, getMyOrders);
 router.get(

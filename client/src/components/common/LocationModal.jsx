@@ -3,14 +3,14 @@ import { FiMapPin, FiX, FiCrosshair } from "react-icons/fi";
 import { useLocation } from "../../context/LocationContext";
 
 const cities = [
-  { name: "Mumbai", lat: 19.076, lng: 72.8777 },
-  { name: "Delhi", lat: 28.6139, lng: 77.209 },
-  { name: "Bangalore", lat: 12.9716, lng: 77.5946 },
-  { name: "Kolkata", lat: 22.5726, lng: 88.3639 },
-  { name: "Chennai", lat: 13.0827, lng: 80.2707 },
-  { name: "Pune", lat: 18.5204, lng: 73.8567 },
-  { name: "Hyderabad", lat: 17.385, lng: 78.4867 },
-  { name: "Ahmedabad", lat: 23.0225, lng: 72.5714 },
+  // { name: "Mumbai", lat: 19.076, lng: 72.8777 },
+  // { name: "Delhi", lat: 28.6139, lng: 77.209 },
+  // { name: "Bangalore", lat: 12.9716, lng: 77.5946 },
+  // { name: "Kolkata", lat: 22.5726, lng: 88.3639 },
+  // { name: "Chennai", lat: 13.0827, lng: 80.2707 },
+  // { name: "Pune", lat: 18.5204, lng: 73.8567 },
+  // { name: "Hyderabad", lat: 17.385, lng: 78.4867 },
+  // { name: "Ahmedabad", lat: 23.0225, lng: 72.5714 },
 ];
 
 const LocationModal = ({ isOpen, onClose, onSelect, currentLocation }) => {

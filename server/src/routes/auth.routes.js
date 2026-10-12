@@ -16,13 +16,13 @@
 
 // export default router;
 
-
 import express from "express";
 import {
   register,
   login,
   getMe,
   logout,
+  saveFcmToken, // 🔔 Naya import
 } from "../controllers/auth.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
 
@@ -33,5 +33,8 @@ router.post("/register", register);
 router.post("/login", login);
 router.get("/me", protect, getMe);
 router.post("/logout", protect, logout);
+
+// 🔔 FCM Token Save Route
+router.post("/save-fcm-token", protect, saveFcmToken);
 
 export default router;

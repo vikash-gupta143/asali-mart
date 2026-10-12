@@ -2,7 +2,8 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   FiGrid, FiUsers, FiShoppingBag, FiPackage,
   FiCreditCard, FiStar, FiAlertCircle, FiLogOut, FiHome,
-  FiTruck, FiTag, FiBarChart2, FiDollarSign,FiSettings, FiCheckCircle,   FiXCircle, FiImage,
+  FiTruck, FiTag, FiBarChart2, FiDollarSign, FiSettings,
+  FiCheckCircle, FiXCircle, FiImage, FiRefreshCw,
 } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 
@@ -18,6 +19,7 @@ const AdminLayout = () => {
     { name: "Shops", path: "/admin/shops", icon: FiShoppingBag },
     { name: "Products", path: "/admin/products", icon: FiPackage },
     { name: "Orders", path: "/admin/orders", icon: FiShoppingBag },
+    { name: "Returns", path: "/admin/returns", icon: FiRefreshCw },  // 🆕 Returns
     { name: "Delivery Partners", path: "/admin/delivery-partners", icon: FiTruck },
     { name: "Payouts", path: "/admin/payouts", icon: FiDollarSign },
     { name: "Bank Verification", path: "/admin/bank-verification", icon: FiCreditCard },

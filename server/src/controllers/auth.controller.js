@@ -136,3 +136,30 @@ export const logout = async (req, res, next) => {
     message: "Logged out successfully",
   });
 };
+
+// 🔔 @desc    Save FCM Token for Push Notifications
+// @route   POST /api/auth/save-fcm-token
+// @access  Private
+export const saveFcmToken = async (req, res, next) => {
+  try {
+    const { fcmToken } = req.body;
+
+    if (!fcmToken) {
+      return res.status(400).json({
+        success: false,
+        message: "FCM Token is required",
+      });
+    }
+
+    // User ko dhundh kar token update karein
+    // Note: req.user.id middleware se aata hai (auth.middleware.js)
+    await User.findByIdAndUpdate(req.user.id, { fcmToken });
+
+    res.status(200).json({
+      success: true,
+      message: "FCM Token saved successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};

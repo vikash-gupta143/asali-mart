@@ -1,6 +1,9 @@
 import DeliveryPartner from "../models/DeliveryPartner.js";
 import User from "../models/User.js";
 
+// 🔔 FCM Push Notification Helper
+import { sendNotificationToUser } from "../utils/sendNotification.js";
+
 // @desc    Register as delivery partner with KYC
 // @route   POST /api/delivery-partners/register
 // @access  Private
@@ -108,6 +111,25 @@ export const registerDeliveryPartner = async (req, res, next) => {
       status: "PENDING",
     });
 
+    // 🔔 PUSH NOTIFICATION (FCM) — Notify all ADMINS about new application
+    try {
+      const admins = await User.find({ role: "ADMIN" }).select("_id");
+      for (const admin of admins) {
+        await sendNotificationToUser(
+          admin._id.toString(),
+          "🚚 New Delivery Partner Application",
+          `${partner.fullName} has applied to become a delivery partner`,
+          {
+            partnerId: partner._id.toString(),
+            type: "NEW_DELIVERY_PARTNER_APPLICATION",
+            link: "/admin/delivery-partners",
+          }
+        );
+      }
+    } catch (notifErr) {
+      console.error("❌ Push notification failed:", notifErr.message);
+    }
+
     res.status(201).json({
       success: true,
       message: "Application submitted! Admin will verify in 24-48 hours.",
@@ -190,6 +212,35 @@ export const verifyApplication = async (req, res, next) => {
     }
 
     await partner.save();
+
+    // 🔔 PUSH NOTIFICATION (FCM) — Notify partner about approval/rejection
+    try {
+      if (action === "approve") {
+        await sendNotificationToUser(
+          partner.user.toString(),
+          "🎉 Application Approved!",
+          `Congratulations! You are now an AsaliMart Delivery Partner.`,
+          {
+            partnerId: partner._id.toString(),
+            type: "DELIVERY_PARTNER_APPROVED",
+            link: "/delivery/dashboard",
+          }
+        );
+      } else if (action === "reject") {
+        await sendNotificationToUser(
+          partner.user.toString(),
+          "❌ Application Rejected",
+          `Your application was rejected. Reason: ${reason || "Documents not valid"}`,
+          {
+            partnerId: partner._id.toString(),
+            type: "DELIVERY_PARTNER_REJECTED",
+            link: "/delivery/status",
+          }
+        );
+      }
+    } catch (notifErr) {
+      console.error("❌ Push notification failed:", notifErr.message);
+    }
 
     res.json({
       success: true,
@@ -413,6 +464,22 @@ export const verifyDeliveryBank = async (req, res, next) => {
 
     await partner.save();
 
+    // 🔔 PUSH NOTIFICATION (FCM) — Notify partner that bank is verified
+    try {
+      await sendNotificationToUser(
+        partner.user.toString(),
+        "🏦 Bank Details Verified",
+        "Your bank & UPI details have been verified successfully.",
+        {
+          partnerId: partner._id.toString(),
+          type: "BANK_VERIFIED",
+          link: "/delivery/earnings",
+        }
+      );
+    } catch (notifErr) {
+      console.error("❌ Push notification failed:", notifErr.message);
+    }
+
     res.json({
       success: true,
       message: "Bank & UPI verified",
@@ -458,6 +525,22 @@ export const rejectDeliveryBank = async (req, res, next) => {
     }
 
     await partner.save();
+
+    // 🔔 PUSH NOTIFICATION (FCM) — Notify partner about bank rejection
+    try {
+      await sendNotificationToUser(
+        partner.user.toString(),
+        "❌ Bank Details Rejected",
+        `Your bank details were rejected. Reason: ${reason || "Invalid bank details"}. Please re-upload.`,
+        {
+          partnerId: partner._id.toString(),
+          type: "BANK_REJECTED",
+          link: "/delivery/profile",
+        }
+      );
+    } catch (notifErr) {
+      console.error("❌ Push notification failed:", notifErr.message);
+    }
 
     res.json({
       success: true,

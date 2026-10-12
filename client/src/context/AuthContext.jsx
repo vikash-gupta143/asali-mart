@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import api from "../services/api";
 import { useLocation } from "./LocationContext";
+// 🔔 Firebase Imports
+import { getMessaging, getToken } from "firebase/messaging";
 
 const AuthContext = createContext();
 
@@ -37,12 +39,51 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // 🔔 FCM Token Request & Save to Server
+  const requestNotificationPermission = async () => {
+    try {
+      if (!("Notification" in window)) {
+        console.log("⚠️ This browser does not support notifications");
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        console.log("⚠️ Notification permission denied");
+        return;
+      }
+
+      // Note: 'messaging' variable global nahi hai, isliye yahan getMessaging call karenge.
+      // Lekin behtar hai ki aap ise kisi central firebase.js file se import karein.
+      // Abhi ke liye hum assume kar rahe hain ki firebase already initialized hai (main.jsx me).
+      const { getApp } = await import("firebase/app");
+      const messaging = getMessaging(getApp());
+
+      const token = await getToken(messaging, {
+        vapidKey: "BKKADvv_vkv0b0tteqwvq0jFTQ0eZlhN2JZl4SSgkXUeYw28u2HU1dc_6F-JARkYQiedOSJ_0tQ3ccarxMgMCCA", // 🔴 Ye key Firebase Console -> Project Settings -> Cloud Messaging -> Web Push certificates se lena
+      });
+
+      if (token) {
+        console.log("✅ FCM Token:", token);
+        // Server pe token bhejein
+        await api.post("/auth/save-fcm-token", { fcmToken: token });
+      } else {
+        console.log("⚠️ No registration token available.");
+      }
+    } catch (error) {
+      console.error("❌ Error getting FCM token:", error);
+    }
+  };
+
   const register = async (data) => {
     setLoading(true);
     try {
       const res = await api.post("/auth/register", data);
       localStorage.setItem("asali_token", res.data.token);
       setUser(res.data.user);
+
+      // 🔔 Request Notification Permission after signup
+      await requestNotificationPermission();
 
       // 🌍 Auto-detect location after signup
       await tryAutoDetectLocation();
@@ -64,6 +105,9 @@ export const AuthProvider = ({ children }) => {
       const res = await api.post("/auth/login", { email, password });
       localStorage.setItem("asali_token", res.data.token);
       setUser(res.data.user);
+
+      // 🔔 Request Notification Permission after login
+      await requestNotificationPermission();
 
       // 🌍 Auto-detect location after login
       await tryAutoDetectLocation();
@@ -94,4 +138,4 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = ( ) => useContext(AuthContext);

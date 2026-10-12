@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   FiMapPin, FiCreditCard, FiDollarSign, FiCheck,
   FiShoppingBag, FiTruck, FiTag, FiX, FiClock, FiAlertCircle,
-  FiNavigation, FiLoader, FiSmartphone, FiUpload,
+  FiNavigation, FiLoader, FiSmartphone,
 } from "react-icons/fi";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -32,30 +32,22 @@ const Checkout = () => {
   const [payment, setPayment] = useState("COD");
   const [deliveryType, setDeliveryType] = useState("ASALIMART");
 
-  // 🆕 Pincode validation states
   const [pincodeError, setPincodeError] = useState("");
   const [checkingPincode, setCheckingPincode] = useState(false);
   const [pincodeAvailable, setPincodeAvailable] = useState(null);
 
-  // 🆕 Auto-fill states
   const [autoFilling, setAutoFilling] = useState(false);
   const [autoFilled, setAutoFilled] = useState(false);
 
-  // 🎟️ Coupon states
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState(null);
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponError, setCouponError] = useState("");
   const [availableCoupons, setAvailableCoupons] = useState([]);
 
-  // 🆕 Platform settings (Admin UPI/QR)
   const [settings, setSettings] = useState(null);
+  const [razorpayLoading, setRazorpayLoading] = useState(false);
 
-  // 🆕 Online payment states
-  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
-  const [transactionId, setTransactionId] = useState("");
-
-  // 📍 Address
   const [address, setAddress] = useState({
     name: user?.name || "",
     phone: user?.phone || "",
@@ -66,7 +58,6 @@ const Checkout = () => {
     coordinates: null,
   });
 
-  // 🆕 Load platform settings
   useEffect(() => {
     const load = async () => {
       try {
@@ -79,7 +70,6 @@ const Checkout = () => {
     load();
   }, []);
 
-  // 🆕 Auto-fill city when location changes
   useEffect(() => {
     if (location?.name && !address.coordinates) {
       setAddress((prev) => ({
@@ -90,7 +80,6 @@ const Checkout = () => {
     // eslint-disable-next-line
   }, [location]);
 
-  // 🆕 Auto-fill full address from GPS
   useEffect(() => {
     const autoFill = async () => {
       if (!location?.lat || !location?.lng) return;
@@ -128,13 +117,11 @@ const Checkout = () => {
     // eslint-disable-next-line
   }, [location]);
 
-  // 💵 Pricing
   const delivery = totalPrice > 500 ? 0 : 30;
   const platformFee = 10;
   const couponDiscount = coupon?.discount || 0;
   const finalTotal = totalPrice + delivery + platformFee - couponDiscount;
 
-  // Load available coupons
   useEffect(() => {
     const load = async () => {
       try {
@@ -181,9 +168,6 @@ const Checkout = () => {
     );
   }
 
-  // ============================================
-  // 📍 Pincode Check
-  // ============================================
   const handlePincodeCheck = async (pincode) => {
     setPincodeError("");
     setPincodeAvailable(null);
@@ -217,7 +201,6 @@ const Checkout = () => {
     }
   };
 
-  // 🎟️ Apply coupon
   const handleApplyCoupon = async () => {
     setCouponError("");
     if (!couponInput.trim()) return;
@@ -239,17 +222,100 @@ const Checkout = () => {
     setCouponError("");
   };
 
-  // 🆕 Upload screenshot to Cloudinary (via backend)
-  const uploadScreenshot = async (file) => {
-    const formData = new FormData();
-    formData.append("image", file);
-    const res = await api.post("/upload", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-    return res.data.url;
+  // ============================================
+  // 💳 RAZORPAY PAYMENT HANDLER
+  // ============================================
+  const handleRazorpayPayment = async () => {
+    setError("");
+    setRazorpayLoading(true);
+
+    try {
+      const { data } = await api.post("/orders/create-razorpay-order", {
+        amount: finalTotal,
+        receipt: `receipt_${Date.now()}`,
+        notes: {
+          customerName: address.name,
+          customerPhone: address.phone,
+          // userId aur userEmail backend automatically add karega
+        },
+      });
+
+      if (!data.success) {
+        throw new Error(data.message || "Failed to create Razorpay order");
+      }
+
+      const options = {
+        key: data.keyId,
+        amount: data.order.amount,
+        currency: data.order.currency,
+        name: "AsaliMart",
+        description: `Order Payment`,
+        order_id: data.order.id,
+        prefill: {
+          name: address.name,
+          contact: address.phone,
+          email: user?.email || "",
+        },
+        theme: {
+          color: "#16a34a",
+        },
+        handler: async (response) => {
+          try {
+            const verifyRes = await api.post("/orders/verify-payment", {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+
+            if (verifyRes.data.success) {
+              await createOrderAfterPayment({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+              });
+            } else {
+              setError("Payment verification failed. Please contact support.");
+              setRazorpayLoading(false);
+            }
+          } catch (err) {
+            console.error("Verification error:", err);
+            setError(
+              err.response?.data?.message ||
+                "Payment verification failed. Please contact support."
+            );
+            setRazorpayLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setRazorpayLoading(false);
+            setError("Payment cancelled. Please try again.");
+          },
+        },
+      };
+
+      const razorpayInstance = new window.Razorpay(options);
+      razorpayInstance.open();
+
+      razorpayInstance.on("payment.failed", (response) => {
+        console.error("Payment failed:", response.error);
+        setError(`Payment failed: ${response.error.description}`);
+        setRazorpayLoading(false);
+      });
+    } catch (err) {
+      console.error("Razorpay error:", err);
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to initialize payment"
+      );
+      setRazorpayLoading(false);
+    }
   };
 
-  const handlePlaceOrder = async () => {
+  // ============================================
+  // 📦 CREATE ORDER (After Payment Success)
+  // ============================================
+  const createOrderAfterPayment = async (razorpayData = {}) => {
     setError("");
 
     const finalLat = address.coordinates?.lat || location?.lat;
@@ -257,40 +323,20 @@ const Checkout = () => {
 
     if (!finalLat || !finalLng) {
       setError("Address ya location set karein.");
+      setLoading(false);
+      setRazorpayLoading(false);
       return;
     }
 
     if (pincodeAvailable !== true) {
       setError("Pincode verify nahi hua.");
+      setLoading(false);
+      setRazorpayLoading(false);
       return;
-    }
-
-    // 🆕 Online payment validation
-    if (payment === "ONLINE") {
-      if (!paymentScreenshot) {
-        setError("Payment screenshot upload karein");
-        return;
-      }
-      if (!transactionId.trim()) {
-        setError("UPI Transaction ID daalein");
-        return;
-      }
     }
 
     try {
       setLoading(true);
-
-      // 🆕 Upload screenshot
-      let screenshotUrl = "";
-      if (payment === "ONLINE" && paymentScreenshot) {
-        try {
-          screenshotUrl = await uploadScreenshot(paymentScreenshot);
-        } catch (err) {
-          setError("Screenshot upload failed. Try again.");
-          setLoading(false);
-          return;
-        }
-      }
 
       const items = cart.map((item) => ({
         product: item._id || item.id,
@@ -312,24 +358,21 @@ const Checkout = () => {
         paymentMode: payment,
         deliveryType,
         couponCode: coupon?.code || "",
-        // 🆕 Online payment details
-        paymentDetails: payment === "ONLINE" ? {
-          transactionId: transactionId.trim(),
-          screenshot: screenshotUrl,
-          paidTo: settings?.platformUpiId || "",
-        } : undefined,
+        razorpay_payment_id: razorpayData.razorpay_payment_id || "",
+        razorpay_order_id: razorpayData.razorpay_order_id || "",
       });
 
       clearCart();
+      setLoading(false);
+      setRazorpayLoading(false);
       navigate(`/orders/${res.order._id}`);
     } catch (err) {
       setError(err.response?.data?.message || "Failed to place order");
-    } finally {
       setLoading(false);
+      setRazorpayLoading(false);
     }
   };
 
-  // 🎨 Time window colors
   const windowColors = {
     day: {
       bg: "bg-orange-50 border-orange-200",
@@ -350,8 +393,7 @@ const Checkout = () => {
 
   const colors = windowColors[deliveryInfo.window] || windowColors.night;
 
-  // 🛑 FIXED: Button Disable Logic
-  const isAddressValid = 
+  const isAddressValid =
     address.name?.trim().length >= 2 &&
     address.phone?.trim().length >= 10 &&
     address.line1?.trim().length >= 5 &&
@@ -361,11 +403,6 @@ const Checkout = () => {
 
   const canContinueToPayment =
     isAddressValid && pincodeAvailable === true && !checkingPincode;
-
-  const canPlaceOrder = () => {
-    if (payment === "COD") return true;
-    return paymentScreenshot && transactionId.trim();
-  };
 
   return (
     <div className="container-custom py-6">
@@ -637,7 +674,6 @@ const Checkout = () => {
           {/* Step 2 — Payment + Delivery */}
           {step === 2 && (
             <div className="space-y-4">
-              {/* Payment Method */}
               <div className="bg-white rounded-xl shadow-card p-5 space-y-3">
                 <h3 className="font-heading font-bold text-lg flex items-center gap-2 mb-3">
                   <FiCreditCard className="text-primary" /> Payment Method
@@ -651,9 +687,9 @@ const Checkout = () => {
                   },
                   {
                     id: "ONLINE",
-                    label: "Online Payment (UPI)",
+                    label: "Online Payment (Razorpay)",
                     icon: FiSmartphone,
-                    desc: "Pay via UPI to AsaliMart",
+                    desc: "Pay via UPI/Card/Netbanking",
                   },
                 ].map((p) => (
                   <button
@@ -679,86 +715,16 @@ const Checkout = () => {
                 ))}
               </div>
 
-              {/* 🆕 Online Payment Section — Admin UPI/QR */}
+              {/* 💳 Razorpay Info Section — MINIMAL */}
               {payment === "ONLINE" && (
-                <div className="bg-blue-50 rounded-xl border-2 border-blue-200 p-5 space-y-4">
+                <div className="bg-green-50 rounded-xl border-2 border-green-200 p-5">
                   <div className="text-center">
                     <p className="font-heading font-bold text-lg mb-1">
-                      💳 Pay ₹{finalTotal}
+                      💳 Pay ₹{finalTotal} with Razorpay
                     </p>
-                    <p className="text-xs text-muted mb-4">
-                      {settings?.platformName || "AsaliMart"} ke UPI pe payment karein
+                    <p className="text-xs text-muted">
+                      UPI, Card, Netbanking, Wallets — sab supported
                     </p>
-
-                    {/* QR Code */}
-                    {settings?.platformQrCode ? (
-                      <img
-                        src={settings.platformQrCode}
-                        alt="Pay QR"
-                        className="w-56 h-56 mx-auto rounded-xl border-4 border-white shadow-card"
-                      />
-                    ) : (
-                      <div className="w-56 h-56 mx-auto rounded-xl bg-gray-100 flex items-center justify-center border-2 border-dashed">
-                        <p className="text-xs text-muted text-center px-4">
-                          QR available nahi hai. UPI ID use karein.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* UPI ID */}
-                    <div className="mt-4 inline-block px-4 py-2 rounded-xl bg-white border border-blue-200">
-                      <p className="text-[10px] text-muted mb-0.5">UPI ID</p>
-                      <p className="font-mono font-bold text-sm">
-                        {settings?.platformUpiId || "Not set"}
-                      </p>
-                    </div>
-
-                    <p className="text-[10px] text-blue-700 mt-3">
-                      ⚠️ Payment ke baad screenshot aur transaction ID zaroor daalein
-                    </p>
-                  </div>
-
-                  {/* Screenshot Upload */}
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">
-                      Payment Screenshot *
-                    </label>
-                    <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-blue-300 rounded-xl cursor-pointer hover:border-primary bg-white">
-                      <FiUpload className="text-blue-500 text-2xl mb-1" />
-                      <p className="text-xs text-muted">
-                        {paymentScreenshot
-                          ? paymentScreenshot.name
-                          : "Screenshot upload karein"}
-                      </p>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setPaymentScreenshot(e.target.files[0])}
-                        className="hidden"
-                      />
-                    </label>
-                    {paymentScreenshot && (
-                      <button
-                        onClick={() => setPaymentScreenshot(null)}
-                        className="text-xs text-red-600 mt-1 hover:underline"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Transaction ID */}
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">
-                      UPI Transaction ID *
-                    </label>
-                    <input
-                      type="text"
-                      value={transactionId}
-                      onChange={(e) => setTransactionId(e.target.value)}
-                      placeholder="e.g. 425784512345"
-                      className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-primary text-sm bg-white"
-                    />
                   </div>
                 </div>
               )}
@@ -840,12 +806,6 @@ const Checkout = () => {
                 </button>
                 <button
                   onClick={() => {
-                    if (payment === "ONLINE") {
-                      if (!paymentScreenshot || !transactionId.trim()) {
-                        setError("Screenshot aur Transaction ID dono zaroori hain");
-                        return;
-                      }
-                    }
                     setError("");
                     setStep(3);
                   }}
@@ -864,7 +824,6 @@ const Checkout = () => {
                 Review Order
               </h3>
 
-              {/* Items */}
               <div className="space-y-2 mb-4">
                 {cart.map((item) => (
                   <div
@@ -885,7 +844,6 @@ const Checkout = () => {
                 ))}
               </div>
 
-              {/* Address Preview */}
               <div className="p-3 rounded-xl bg-bg mb-4 text-xs">
                 <p className="font-semibold text-dark mb-1">📍 Delivery Address</p>
                 <p className="text-muted">
@@ -896,7 +854,6 @@ const Checkout = () => {
                 </p>
               </div>
 
-              {/* Delivery + Payment */}
               <div className="p-3 rounded-xl bg-bg mb-4 space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted">Delivery Method</span>
@@ -911,20 +868,11 @@ const Checkout = () => {
                   <span className="font-semibold">
                     {payment === "COD"
                       ? "Cash on Delivery"
-                      : "Online Payment (UPI)"}
+                      : "Online Payment (Razorpay)"}
                   </span>
                 </div>
-                {payment === "ONLINE" && transactionId && (
-                  <div className="flex justify-between">
-                    <span className="text-muted">Transaction ID</span>
-                    <span className="font-mono font-semibold text-xs">
-                      {transactionId}
-                    </span>
-                  </div>
-                )}
               </div>
 
-              {/* Coupon */}
               <div className="p-4 rounded-xl bg-bg mb-4">
                 <p className="text-sm font-semibold mb-2 flex items-center gap-2">
                   <FiTag className="text-primary" /> Have a coupon?
@@ -1012,7 +960,6 @@ const Checkout = () => {
                 )}
               </div>
 
-              {/* Price Summary */}
               <div className="border-t pt-3 text-sm space-y-1">
                 <div className="flex justify-between">
                   <span className="text-muted">Subtotal</span>
@@ -1045,13 +992,30 @@ const Checkout = () => {
                 >
                   Back
                 </button>
-                <button
-                  onClick={handlePlaceOrder}
-                  disabled={loading || pincodeAvailable !== true || !canPlaceOrder()}
-                  className="flex-1 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary-dark transition disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {loading ? "Placing order..." : "Place Order"}
-                </button>
+
+                {payment === "ONLINE" ? (
+                  <button
+                    onClick={handleRazorpayPayment}
+                    disabled={razorpayLoading || loading || pincodeAvailable !== true}
+                    className="flex-1 py-3 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {razorpayLoading ? (
+                      <>
+                        <FiLoader className="animate-spin" /> Opening Razorpay...
+                      </>
+                    ) : (
+                      <>💳 Pay ₹{finalTotal} with Razorpay</>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => createOrderAfterPayment({})}
+                    disabled={loading || pincodeAvailable !== true}
+                    className="flex-1 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary-dark transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {loading ? "Placing order..." : "Place Order (COD)"}
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1096,7 +1060,7 @@ const Checkout = () => {
               <div className="flex justify-between">
                 <span className="text-muted">Payment</span>
                 <span className="font-semibold">
-                  {payment === "COD" ? "COD" : "Online (UPI)"}
+                  {payment === "COD" ? "COD" : "Razorpay"}
                 </span>
               </div>
             </div>

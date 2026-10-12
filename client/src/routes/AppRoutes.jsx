@@ -48,6 +48,8 @@ import SellerOrders from "../pages/seller/SellerOrders";
 import ComingSoon from "../pages/seller/ComingSoon";
 import SellerEarnings from "../pages/seller/Earnings";
 import SellerWallet from "../pages/seller/Wallet"; // 🆕
+import SellerReturns from "../pages/seller/SellerReturns"; // 🆕 RETURNS
+import SalesAnalytics from "../pages/seller/SalesAnalytics";
 
 // Admin
 import AdminDashboard from "../pages/admin/Dashboard";
@@ -63,6 +65,7 @@ import AdminPayouts from "../pages/admin/Payouts";
 import AdminBankVerification from "../pages/admin/BankVerification";
 import AdminSettings from "../pages/admin/Settings";
 import AdminOrderVerification from "../pages/admin/OrderVerification";
+import AdminReturns from "../pages/admin/AdminReturns"; // 🆕 RETURNS
 
 {/* Legal pages */}
 
@@ -71,6 +74,10 @@ import Privacy from "../pages/legal/Privacy";
 import Refund from "../pages/legal/Refund";
 import Shipping from "../pages/legal/Shipping";
 import NotFound from "../pages/NotFound";
+
+// 🆕 Return Pages (Customer)
+import ReturnRequest from "../pages/ReturnRequest";
+import ReturnDetails from "../pages/ReturnDetails";
 
 const AppRoutes = () => {
   return (
@@ -86,6 +93,11 @@ const AppRoutes = () => {
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/orders/:id" element={<OrderDetails />} />
+
+        {/* 🆕 RETURN ROUTES (Customer) */}
+        <Route path="/return/:orderId" element={<ReturnRequest />} />
+        <Route path="/returns/:id" element={<ReturnDetails />} />
+
         <Route path="/my-reviews" element={<MyReviews />} />
         <Route path="/coupons" element={<Coupons />} />
         <Route path="/profile" element={<Profile />} />
@@ -119,6 +131,8 @@ const AppRoutes = () => {
         <Route path="add-product" element={<AddProduct />} />
         <Route path="edit-product/:id" element={<EditProduct />} />
         <Route path="orders" element={<SellerOrders />} />
+        <Route path="returns" element={<SellerReturns />} /> {/* 🆕 RETURNS */}
+        <Route path="analytics" element={<SalesAnalytics />} />
         <Route path="customers" element={<ComingSoon title="Customers" emoji="👥" />} />
         <Route path="sales" element={<ComingSoon title="Sales Analytics" emoji="📊" />} />
         <Route path="profile" element={<SellerProfile />} />
@@ -148,6 +162,7 @@ const AppRoutes = () => {
         <Route path="bank-verification" element={<AdminBankVerification />} />
         <Route path="settings" element={<AdminSettings />} />
         <Route path="order-verification" element={<AdminOrderVerification />} />
+        <Route path="returns" element={<AdminReturns />} /> {/* 🆕 RETURNS */}
         <Route path="payments" element={<AdminComingSoon title="Payments" emoji="💳" />} />
         <Route path="reviews" element={<AdminComingSoon title="Reviews" emoji="⭐" />} />
         <Route path="complaints" element={<AdminComingSoon title="Complaints" emoji="⚠️" />} />

@@ -9,7 +9,7 @@ const createAdmin = async () => {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("✅ DB connected");
 
-    const email = "admin@asalimart.com";
+    const email = "asalimart6@gmail.com";
     const existing = await User.findOne({ email });
 
     if (existing) {
@@ -19,9 +19,9 @@ const createAdmin = async () => {
 
     const admin = await User.create({
       name: "AsaliMart Admin",
-      email,
-      phone: "9999999999",
-      password: "admin123",
+      email : "asalimart6@gmail.com",
+      phone: "8709869879",
+      password: "bajarangbali360150155771",
       role: "ADMIN",
     });
 

@@ -91,7 +91,7 @@ const orderSchema = new mongoose.Schema(
       default: "PENDING",
     },
 
-    // 🆕 ——— Payment Details (Online UPI) ———
+    // 🆕 ——— Payment Details (Online UPI + Razorpay) ———
     paymentDetails: {
       method: {
         type: String,
@@ -107,12 +107,19 @@ const orderSchema = new mongoose.Schema(
       transactionId: { type: String, default: "" },
       paidTo: { type: String, default: "" },
       screenshot: { type: String, default: "" },
+      // 🆕 Razorpay fields
+      razorpayOrderId: { type: String, default: "" },   // 👈 YEH ADD KIYA
+      razorpayPaymentId: { type: String, default: "" }, // 👈 YEH BHI
       verifiedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
       verifiedAt: Date,
       rejectionReason: { type: String, default: "" },
+      // 🆕 Refund fields
+      refundId: { type: String, default: "" },
+      refundedAt: Date,
+      refundStatus: { type: String, default: "" },
     },
 
     // 🆕 ——— Payment Collection (Delivery Boy ne cash/UPI liya) ———
@@ -194,9 +201,53 @@ const orderSchema = new mongoose.Schema(
     ],
 
     // ——— Timestamps ———
+       // ——— Timestamps ———
     deliveredAt: Date,
     cancelledAt: Date,
     cancelReason: String,
+
+    // 🆕 ——— Return/Refund System ———
+    returnStatus: {
+      type: String,
+      enum: [
+        "NONE",
+        "REQUESTED",
+        "APPROVED",
+        "REJECTED",
+        "PICKUP_SCHEDULED",
+        "PICKED_UP",
+        "RECEIVED",
+        "REFUND_INITIATED",
+        "COMPLETED",
+        "DISPUTED",
+      ],
+      default: "NONE",
+    },
+
+    // 🆕 ——— Return Window Deadline ———
+    returnDeadline: {
+      type: Date,
+      default: null,
+    },
+
+    // 🆕 ——— Return Info (Aggregate) ———
+    returnInfo: {
+      returnId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Return",
+        default: null,
+      },
+      reason: { type: String, default: "" },
+      type: {
+        type: String,
+        enum: ["REFUND", "EXCHANGE", ""],
+        default: "",
+      },
+      refundAmount: { type: Number, default: 0 },
+      refundMethod: { type: String, default: "" },
+      requestedAt: Date,
+      completedAt: Date,
+    },
   },
   { timestamps: true }
 );
