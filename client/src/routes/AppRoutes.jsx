@@ -26,6 +26,8 @@ import ShopDetails from "../pages/ShopDetails";
 import Chat from "../pages/Chat";
 import MyReviews from "../pages/MyReviews";
 import Coupons from "../pages/Coupons";
+import ForgotPassword from "../pages/ForgotPassword";
+import ResetPassword from "../pages/ResetPassword";
 
 // Delivery Partner
 import BecomePartner from "../pages/delivery/BecomePartner";
@@ -103,6 +105,8 @@ const AppRoutes = () => {
         <Route path="/profile" element={<Profile />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/chat/:id" element={<Chat />} />

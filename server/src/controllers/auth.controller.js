@@ -1,5 +1,6 @@
 import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
+import { sendPasswordResetEmail } from "../services/email.service.js";
 
 // @desc    Register new user
 // @route   POST /api/auth/register
@@ -152,12 +153,156 @@ export const saveFcmToken = async (req, res, next) => {
     }
 
     // User ko dhundh kar token update karein
-    // Note: req.user.id middleware se aata hai (auth.middleware.js)
     await User.findByIdAndUpdate(req.user.id, { fcmToken });
 
     res.status(200).json({
       success: true,
       message: "FCM Token saved successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================
+// 🔐 FORGOT PASSWORD — Send Reset Link
+// @route   POST /api/auth/forgot-password
+// @access  Public
+// ============================================================
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email zaroori hai",
+      });
+    }
+
+    // User dhundo
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+
+    if (!user) {
+      // 🔒 Security: Same message for existing/non-existing user
+      return res.status(200).json({
+        success: true,
+        message:
+          "Agar yeh email registered hai, toh reset link bhej diya jayega. Apna inbox check karein.",
+      });
+    }
+
+    // Reset token generate karo
+    const resetToken = user.getResetPasswordToken();
+    await user.save({ validateBeforeSave: false });
+
+    // Email bhejo
+    const emailResult = await sendPasswordResetEmail(
+      user.email,
+      resetToken,
+      user.name
+    );
+
+    if (!emailResult.success) {
+      // Token clear karo agar email fail hui
+      user.resetPasswordToken = null;
+      user.resetPasswordExpire = null;
+      await user.save({ validateBeforeSave: false });
+
+      return res.status(500).json({
+        success: false,
+        message: "Email bhejne me problem aayi. Dobara try karein.",
+      });
+    }
+
+    console.log(`✅ Password reset email sent to ${user.email}`);
+
+    res.status(200).json({
+      success: true,
+      message:
+        "Reset link aapke email pe bhej diya gaya hai. 15 minute ke andar use karein.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================
+// 🔐 RESET PASSWORD — Set New Password
+// @route   PUT /api/auth/reset-password/:token
+// @access  Public
+// ============================================================
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { password, confirmPassword } = req.body;
+
+    // Validation
+    if (!password || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Password aur confirm password zaroori hai",
+      });
+    }
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Password aur confirm password match nahi kar rahe",
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password kam se kam 6 characters ka hona chahiye",
+      });
+    }
+
+    // Token hash karo
+    const crypto = await import("crypto");
+    const resetPasswordToken = crypto
+      .createHash("sha256")
+      .update(req.params.token)
+      .digest("hex");
+
+    // User dhundo — valid token aur expiry check
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Reset link invalid ya expire ho gaya. Dobara 'Forgot Password' request karein.",
+      });
+    }
+
+    // Naya password set karo
+    user.password = password;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpire = null;
+
+    await user.save();
+
+    // Token generate karo — auto login ke liye
+    const token = generateToken(user._id, user.role);
+
+    console.log(`✅ Password reset successful for ${user.email}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Password successfully reset ho gaya! 🎉",
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        avatar: user.avatar,
+      },
     });
   } catch (error) {
     next(error);

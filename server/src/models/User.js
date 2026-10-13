@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 const userSchema = new mongoose.Schema(
   {
@@ -52,14 +53,14 @@ const userSchema = new mongoose.Schema(
       bankName: { type: String, default: "" },
       branchName: { type: String, default: "" },
       isVerified: { type: Boolean, default: false },
-      verifiedAt: Date,                                        // 🆕
-      verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // 🆕
-      rejectionReason: { type: String, default: "" },          // 🆕
-      rejectedAt: Date,                                        // 🆕
+      verifiedAt: Date,
+      verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      rejectionReason: { type: String, default: "" },
+      rejectedAt: Date,
     },
 
     // ============================================
-    // 📱 UPI DETAILS (🆕)
+    // 📱 UPI DETAILS
     // ============================================
     upiDetails: {
       upiId: { type: String, default: "" },
@@ -97,20 +98,56 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+
+    // ============================================
+    // 🔐 PASSWORD RESET (Forget Password)
+    // ============================================
+    resetPasswordToken: {
+      type: String,
+      default: null,
+    },
+    resetPasswordExpire: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );
 
-// Password hash karne se pehle
+// ============================================
+// 🔐 Password hash karne se pehle
+// ============================================
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
 });
 
-// Password compare method
+// ============================================
+// 🔐 Password compare method
+// ============================================
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
+};
+
+// ============================================
+// 🔐 Generate Password Reset Token
+// ============================================
+userSchema.methods.getResetPasswordToken = function () {
+  // Random 32-byte token generate karein
+  const resetToken = crypto.randomBytes(32).toString("hex");
+
+  // Token ko hash karke DB me save karein
+  this.resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+
+  // 15 minute ka expiry
+  this.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
+
+  // Plain token return karein (email me bhejne ke liye)
+  return resetToken;
 };
 
 const User = mongoose.model("User", userSchema);

@@ -281,3 +281,86 @@ export const sendTestEmail = async (to) => {
     return { success: false, message: error.message };
   }
 };
+
+// ============================================================
+// 🔐 PASSWORD RESET EMAIL
+// ============================================================
+export const sendPasswordResetEmail = async (email, resetToken, name) => {
+  try {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.warn("⚠️ Email credentials missing — email not sent");
+      return { success: false, message: "Email service not configured" };
+    }
+
+    // ✅ Transporter create karo (yeh line missing thi)
+    const transporter = createTransporter();
+
+    const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+
+    const mailOptions = {
+      from: process.env.EMAIL_FROM || "AsaliMart <noreply@asalimart.com>",
+      to: email,
+      subject: "🔐 Password Reset - AsaliMart",
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; margin: 0; }
+            .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+            .header { background: linear-gradient(135deg, #FF6B00, #FF8C33); color: white; padding: 30px; text-align: center; }
+            .header h1 { margin: 0; font-size: 28px; }
+            .content { padding: 30px; }
+            .content h2 { color: #333; margin-top: 0; }
+            .content p { color: #666; line-height: 1.6; }
+            .button { display: inline-block; padding: 15px 30px; background: #FF6B00; color: white !important; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+            .footer { background: #f9f9f9; padding: 20px; text-align: center; color: #999; font-size: 12px; }
+            .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 20px 0; border-radius: 4px; }
+            .warning p { margin: 0; color: #856404; font-size: 13px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🔐 Password Reset</h1>
+            </div>
+            <div class="content">
+              <h2>Hello ${name || "User"} 👋</h2>
+              <p>Aapne AsaliMart account ka password reset karne ki request ki hai.</p>
+              <p>Naya password set karne ke liye niche button click karein:</p>
+              
+              <div style="text-align: center;">
+                <a href="${resetUrl}" class="button">🔐 Reset Password</a>
+              </div>
+
+              <div class="warning">
+                <p>⚠️ <b>Important:</b> Yeh link sirf <b>15 minute</b> ke liye valid hai.</p>
+              </div>
+
+              <p>Agar aapne yeh request nahi ki hai, toh is email ko ignore karein. Aapka password safe hai.</p>
+              
+              <p style="margin-top: 30px; font-size: 12px; color: #999;">
+                Agar button kaam nahi kar raha, toh yeh URL copy-paste karein:<br>
+                <a href="${resetUrl}" style="color: #FF6B00; word-break: break-all;">${resetUrl}</a>
+              </p>
+            </div>
+            <div class="footer">
+              <p>© ${new Date().getFullYear()} AsaliMart - Local Marketplace</p>
+              <p>Yeh ek automated email hai, kripya reply na karein.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `AsaliMart password reset link: ${resetUrl} (15 minute ke liye valid)`,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`📧 Password reset email sent to ${email}: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("❌ Password reset email failed:", error.message);
+    return { success: false, message: error.message };
+  }
+};
