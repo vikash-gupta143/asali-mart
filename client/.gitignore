@@ -38,3 +38,7 @@ out/
 # Cache
 .cache/
 .parcel-cache/
+
+
+# PWA dev-dist (should not be in repo)
+dev-dist/
