@@ -1,25 +1,81 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  plugins: [react()],
-  build: {
-    outDir: "dist",
-    sourcemap: false,
-    chunkSizeWarningLimit: 1000,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes("node_modules")) {
-            if (id.includes("react-router")) return "router";
-            if (id.includes("react-dom") || id.includes("react/")) return "react";
-            if (id.includes("react-icons")) return "icons";
-            if (id.includes("framer-motion")) return "motion";
-            if (id.includes("axios")) return "axios";
-            return "vendor";
-          }
-        },
-      },
-    },
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg', 'icons.svg', 'robots.txt', 'pwa-192x192.png', 'pwa-512x512.png'],
+      manifest: {
+        name: 'AsaliMart - Local Marketplace',
+        short_name: 'AsaliMart',
+        description: 'Shop from nearby shops, get fast delivery, and bargain directly with sellers.',
+        theme_color: '#FF6B00',
+        background_color: '#ffffff',
+        display: 'standalone',
+        orientation: 'portrait',
+        scope: '/',
+        start_url: '/',
+        icons: [
+  {
+    src: '/pwa-192x192.png',
+    sizes: '192x192',
+    type: 'image/png',
+    purpose: 'any',
   },
-});
+  {
+    src: '/pwa-512x512.png',
+    sizes: '512x512',
+    type: 'image/png',
+    purpose: 'any',
+  },
+  {
+    src: '/pwa-192x192.png',
+    sizes: '192x192',
+    type: 'image/png',
+    purpose: 'maskable',
+  },
+  {
+    src: '/pwa-512x512.png',
+    sizes: '512x512',
+    type: 'image/png',
+    purpose: 'maskable',
+  },
+],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/api\.asalideal\.in\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24, // 24 hours
+              },
+              networkTimeoutSeconds: 10,
+            },
+          },
+          {
+            urlPattern: /^https:\/\/res\.cloudinary\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'cloudinary-images',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+            },
+          },
+        ],
+      },
+      devOptions: {
+        enabled: true,
+      },
+    }),
+  ],
+})
