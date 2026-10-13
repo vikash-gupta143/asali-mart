@@ -1,3 +1,5 @@
+// File: client/src/context/LocationContext.jsx
+
 import { createContext, useContext, useState, useEffect } from "react";
 
 const LocationContext = createContext();
@@ -9,24 +11,39 @@ export const LocationProvider = ({ children }) => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [permissionStatus, setPermissionStatus] = useState("prompt");
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [autoAttempted, setAutoAttempted] = useState(false);
 
-  // Save to localStorage whenever location changes
+  // Save to localStorage
   useEffect(() => {
     if (location) {
       localStorage.setItem("asali_location", JSON.stringify(location));
-    } else {
-      localStorage.removeItem("asali_location");
     }
   }, [location]);
 
-  // 🔧 Helper — build location with fallbacks
+  // Permission status check
+  useEffect(() => {
+    if (navigator.permissions) {
+      navigator.permissions
+        .query({ name: "geolocation" })
+        .then((result) => {
+          setPermissionStatus(result.state);
+          result.onchange = () => {
+            setPermissionStatus(result.state);
+          };
+        })
+        .catch(() => {});
+    }
+  }, []);
+
+  // 🔧 buildLocation — reverse geocoding
   const buildLocation = async (pos) => {
     const lat = pos.coords.latitude;
     const lng = pos.coords.longitude;
-
     let name = "Your Location";
 
-    // 🥇 Try 1: Nominatim
+    // Try 1: Nominatim
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`,
@@ -37,7 +54,6 @@ export const LocationProvider = ({ children }) => {
           },
         }
       );
-
       if (res.ok) {
         const data = await res.json();
         const addr = data.address || {};
@@ -50,19 +66,17 @@ export const LocationProvider = ({ children }) => {
           addr.state_district ||
           addr.state ||
           "Your Location";
-        console.log("✅ Nominatim:", name);
         return { lat, lng, name };
       }
     } catch (err) {
-      console.log("❌ Nominatim failed:", err.message);
+      console.log("Nominatim failed");
     }
 
-    // 🥈 Try 2: BigDataCloud
+    // Try 2: BigDataCloud
     try {
       const res = await fetch(
         `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
       );
-
       if (res.ok) {
         const data = await res.json();
         name =
@@ -71,51 +85,85 @@ export const LocationProvider = ({ children }) => {
           data.principalSubdivision ||
           data.countryName ||
           "Your Location";
-        console.log("✅ BigDataCloud:", name);
         return { lat, lng, name };
       }
     } catch (err) {
-      console.log("❌ BigDataCloud failed:", err.message);
+      console.log("BigDataCloud failed");
     }
 
-    // 🥉 Fallback: coordinates
-    console.log("⚠️ All geocoding failed");
     return { lat, lng, name: `${lat.toFixed(2)}, ${lng.toFixed(2)}` };
   };
 
-  // 🌍 Detect location (manual button click)
-  const detectLocation = () => {
-    if (!navigator.geolocation) {
-      setError("Geolocation not supported");
-      return;
+  // 🎯 Error message
+  const getErrorMessage = (err) => {
+    if (!err || !err.code) {
+      return err?.message || "Location nahi mil payi";
     }
-
-    setLoading(true);
-    setError("");
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const loc = await buildLocation(pos);
-        setLocation(loc);   // ← Context update hoga — sab components ko milega
-        setLoading(false);
-      },
-      (err) => {
-        setError("Location permission denied");
-        setLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+    switch (err.code) {
+      case 1:
+        return "Location permission block ho gayi. Pincode daalein.";
+      case 2:
+        return "Location available nahi hai. Pincode daalein.";
+      case 3:
+        return "Location timeout. Dobara try karein.";
+      default:
+        return "Location nahi mili. Pincode daalein.";
+    }
   };
 
-  // 🌍 Auto-detect (returns promise)
-  const autoDetectLocation = () => {
+  // 🌍 detectLocation — browser popup
+  const detectLocation = () => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject("Geolocation not supported");
+        reject(new Error("Geolocation not supported"));
         return;
       }
 
-      // Agar already saved hai — skip
+      setLoading(true);
+      setError("");
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const loc = await buildLocation(pos);
+            setLocation(loc);
+            setLoading(false);
+            setPermissionStatus("granted");
+            resolve(loc);
+          } catch (err) {
+            setError(err.message);
+            setLoading(false);
+            reject(err);
+          }
+        },
+        (err) => {
+          const msg = getErrorMessage(err);
+          setError(msg);
+          setLoading(false);
+          if (err.code === 1) {
+            setPermissionStatus("denied");
+            setShowLocationModal(true); // 🆕 Block hone pe modal khule
+          }
+          reject(new Error(msg));
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
+      );
+    });
+  };
+
+  // 🆕 autoDetectLocation — App.jsx me use hota hai
+  const autoDetectLocation = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Geolocation not supported"));
+        return;
+      }
+
+      // Already saved — skip
       const saved = localStorage.getItem("asali_location");
       if (saved) {
         resolve(JSON.parse(saved));
@@ -127,25 +175,91 @@ export const LocationProvider = ({ children }) => {
           try {
             const loc = await buildLocation(pos);
             setLocation(loc);
+            setPermissionStatus("granted");
             resolve(loc);
           } catch (err) {
             reject(err);
           }
         },
         (err) => {
-          reject(err.message || "Permission denied");
+          const msg = getErrorMessage(err);
+          setError(msg);
+          if (err.code === 1) {
+            setPermissionStatus("denied");
+            setShowLocationModal(true); // 🆕 Block hone pe modal
+          }
+          reject(new Error(msg));
         },
-        { enableHighAccuracy: true, timeout: 10000 }
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        }
       );
     });
   };
 
+  // 📍 Manual location
   const setManualLocation = (lat, lng, name = "Manual") => {
-    setLocation({ lat, lng, name });
+    const loc = { lat, lng, name };
+    setLocation(loc);
+    setError("");
+    setPermissionStatus("granted");
+    return loc;
   };
+
+  // 📍 Pincode se location
+  const setLocationByPincode = async (pincode) => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const res = await fetch(
+        `https://api.postalpincode.in/pincode/${pincode}`
+      );
+
+      if (!res.ok) {
+        throw new Error("Pincode verify nahi ho paya");
+      }
+
+      const data = await res.json();
+
+      if (data[0]?.Status !== "Success") {
+        throw new Error("Yeh pincode exist nahi karta");
+      }
+
+      const postOffice = data[0].PostOffice[0];
+
+      const loc = {
+        pincode: pincode,
+        name: `${postOffice.Name}, ${postOffice.District}`,
+        city: postOffice.District,
+        state: postOffice.State,
+        lat: null,
+        lng: null,
+      };
+
+      setLocation(loc);
+      setPermissionStatus("granted");
+      setLoading(false);
+
+      return loc;
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+      throw err;
+    }
+  };
+
+  // Modal controls
+  const openLocationModal = () => setShowLocationModal(true);
+  const closeLocationModal = () => setShowLocationModal(false);
 
   const clearLocation = () => {
     setLocation(null);
+    setError("");
+    localStorage.removeItem("asali_location");
+    sessionStorage.removeItem("location_asked");
   };
 
   return (
@@ -154,9 +268,14 @@ export const LocationProvider = ({ children }) => {
         location,
         loading,
         error,
+        permissionStatus,
+        showLocationModal,
+        openLocationModal,
+        closeLocationModal,
         detectLocation,
-        autoDetectLocation,
+        autoDetectLocation, // ✅ Export ho raha hai
         setManualLocation,
+        setLocationByPincode,
         clearLocation,
       }}
     >

@@ -8,28 +8,55 @@ import { SocketProvider } from "./context/SocketContext";
 import AppRoutes from "./routes/AppRoutes";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import SplashScreen from "./components/common/SplashScreen";
+import InstallPrompt from "./components/common/InstallPrompt";
+import LocationModal from "./components/common/LocationModal";
 
-// 🌍 First visit auto-detect
+// 🌍 Location Auto-Detect (Splash ke baad)
 const LocationAutoDetect = ({ children }) => {
-  const { autoDetectLocation } = useLocation();
+  const { autoDetectLocation, location, showLocationModal } = useLocation();
 
   useEffect(() => {
+    // Agar location already saved hai — skip
     const saved = localStorage.getItem("asali_location");
-    if (!saved) {
-      const timer = setTimeout(async () => {
-        try {
-          await autoDetectLocation();
-          console.log("✅ First-visit location auto-detected");
-        } catch (err) {
-          console.log("⚠️ First-visit location skipped:", err);
-        }
-      }, 2000);
+    if (saved || location) return;
 
-      return () => clearTimeout(timer);
-    }
-  }, []);
+    // 🎯 3 second baad browser ka NATIVE popup trigger karo
+    const timer = setTimeout(async () => {
+      try {
+        await autoDetectLocation();
+        console.log("✅ Auto location detected");
+      } catch (err) {
+        console.log("⚠️ Auto location failed:", err.message);
+        // LocationModal khud khul jayega agar fail hua
+      }
+    }, 3000); // 3 sec — splash ke baad
+
+    return () => clearTimeout(timer);
+  }, [location]);
 
   return children;
+};
+
+// 🆕 Global Location Modal Renderer
+const GlobalLocationModal = () => {
+  const {
+    showLocationModal,
+    closeLocationModal,
+    location,
+    setManualLocation,
+  } = useLocation();
+
+  return (
+    <LocationModal
+      isOpen={showLocationModal}
+      onClose={closeLocationModal}
+      onSelect={(loc) => {
+        setManualLocation(loc.lat, loc.lng, loc.name);
+        closeLocationModal();
+      }}
+      currentLocation={location}
+    />
+  );
 };
 
 function App() {
@@ -88,6 +115,8 @@ function App() {
                   />
                   <AppRoutes />
                 </LocationAutoDetect>
+                {/* 🆕 Global Location Modal — Sabse bahar */}
+                <GlobalLocationModal />
               </CartProvider>
             </SocketProvider>
           </AuthProvider>
