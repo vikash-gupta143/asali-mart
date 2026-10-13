@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { CartProvider } from "./context/CartContext";
@@ -7,6 +7,7 @@ import { LocationProvider, useLocation } from "./context/LocationContext";
 import { SocketProvider } from "./context/SocketContext";
 import AppRoutes from "./routes/AppRoutes";
 import ErrorBoundary from "./components/common/ErrorBoundary";
+import SplashScreen from "./components/common/SplashScreen";
 
 // 🌍 First visit auto-detect
 const LocationAutoDetect = ({ children }) => {
@@ -32,9 +33,27 @@ const LocationAutoDetect = ({ children }) => {
 };
 
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
+  // Check if splash already shown in this session
+  useEffect(() => {
+    const hasShown = sessionStorage.getItem("splashShown");
+    if (hasShown) {
+      setShowSplash(false);
+    }
+  }, []);
+
+  const handleSplashFinish = () => {
+    sessionStorage.setItem("splashShown", "true");
+    setShowSplash(false);
+  };
+
   return (
     <ErrorBoundary>
       <BrowserRouter>
+        {/* 🎨 Splash Screen */}
+        {showSplash && <SplashScreen onFinish={handleSplashFinish} />}
+
         <LocationProvider>
           <AuthProvider>
             <SocketProvider>
@@ -77,7 +96,5 @@ function App() {
     </ErrorBoundary>
   );
 }
-
-
 
 export default App;
