@@ -51,7 +51,7 @@ const Home = () => {
         if (location) {
           // 🌍 Nearby products — 10 km
           try {
-            data = await fetchNearbyProducts(location.lat, location.lng, 10, {
+            data = await fetchNearbyProducts(location.lat, location.lng, 5, {
               limit: 8,
             });
           } catch (nearbyErr) {
@@ -276,7 +276,7 @@ const Home = () => {
             </h2>
             {location && (
               <p className="text-xs text-muted mt-0.5">
-                📍 Within 10 km of {location.name}
+                📍 Within 5 km of {location.name}
               </p>
             )}
           </div>
@@ -310,7 +310,7 @@ const Home = () => {
             </h3>
             <p className="text-sm text-muted">
               {location
-                ? `Koi product 10 km ke andar nahi mila. Location change karein ya baad me try karein.`
+                ? `Koi product 5 km ke andar nahi mila.... Location change karein ya baad me try karein.`
                 : "Sellers will add products soon"}
             </p>
           </div>

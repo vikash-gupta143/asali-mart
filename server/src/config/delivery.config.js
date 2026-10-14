@@ -1,14 +1,13 @@
 // 🚚 Delivery Configuration
 export const DELIVERY_CONFIG = {
   radius: {
-    day: 10,
+    day: 5,
     evening: 5,
     night: 5,
   },
   timeWindows: {
     day: { start: 6, end: 17 },
     evening: { start: 17, end: 21 },
-    night: { start: 21, end: 6 },
   },
   timeEstimates: {
     "0-2": { min: 15, max: 20 },
