@@ -2,24 +2,24 @@ import nodemailer from "nodemailer";
 
 // 📧 Create transporter
 const createTransporter = () => {
-  const port = Number(process.env.EMAIL_PORT) || 587;
+  const port = Number(process.env.EMAIL_PORT) || 465;
   
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || "smtp.gmail.com",
     port: port,
-    secure: port === 465,  // ← 465 ke liye true, 587 ke liye false
+    secure: port === 465,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
-    // 🆕 IPv4 force karo (Render IPv6 issue ke liye)
+    tls: {
+      // 🆕 SSL certificate verification ke liye
+      servername: "smtp.gmail.com",
+      rejectUnauthorized: false,
+    },
     connectionTimeout: 30000,
     greetingTimeout: 30000,
     socketTimeout: 30000,
-    // DNS resolution
-    tls: {
-      rejectUnauthorized: false,
-    },
   });
 };
 
