@@ -1,9 +1,10 @@
 import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-// 📧 Create transporter
+// 📧 Create transporter (Nodemailer — local ke liye)
 const createTransporter = () => {
   const port = Number(process.env.EMAIL_PORT) || 465;
-  
+
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || "smtp.gmail.com",
     port: port,
@@ -13,7 +14,6 @@ const createTransporter = () => {
       pass: process.env.EMAIL_PASS,
     },
     tls: {
-      // 🆕 SSL certificate verification ke liye
       servername: "smtp.gmail.com",
       rejectUnauthorized: false,
     },
@@ -23,8 +23,11 @@ const createTransporter = () => {
   });
 };
 
+// 🆕 Resend client (production ke liye — Render SMTP block fix)
+// const resend = new Resend(process.env.RESEND_API_KEY);
+
 // ============================================
-// 📧 1. Send OTP Email (SHIPPED pe jaayega)
+// 📧 1. Send OTP Email
 // ============================================
 export const sendOTPEmail = async (
   to,
@@ -246,7 +249,7 @@ export const sendOrderDeliveredEmail = async (
             Kaisa laga AsaliMart ka experience? Apna feedback share karein!
           </p>
 
-          <a href="http://localhost:5173/orders/${order._id}" 
+          <a href="${process.env.CLIENT_URL}/orders/${order._id}" 
              style="display: inline-block; background: #FF6B00; color: white; padding: 12px 30px; border-radius: 10px; text-decoration: none; font-weight: 600; margin-top: 15px;">
             ⭐ Rate Your Order
           </a>
@@ -293,22 +296,21 @@ export const sendTestEmail = async (to) => {
 };
 
 // ============================================================
-// 🔐 PASSWORD RESET EMAIL
+// 🔐 PASSWORD RESET EMAIL (via Resend — Render SMTP block fix)
 // ============================================================
 export const sendPasswordResetEmail = async (email, resetToken, name) => {
   try {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.warn("⚠️ Email credentials missing — email not sent");
+    if (!process.env.RESEND_API_KEY) {
+      console.warn("⚠️ Resend API key missing — email not sent");
       return { success: false, message: "Email service not configured" };
     }
 
-    // ✅ Transporter create karo (yeh line missing thi)
-    const transporter = createTransporter();
+     const resend = new Resend(process.env.RESEND_API_KEY);
 
     const resetUrl = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
 
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || "AsaliMart <noreply@asalimart.com>",
+    const { data, error } = await resend.emails.send({
+      from: "AsaliMart <onboarding@resend.dev>",
       to: email,
       subject: "🔐 Password Reset - AsaliMart",
       html: `
@@ -363,12 +365,15 @@ export const sendPasswordResetEmail = async (email, resetToken, name) => {
         </body>
         </html>
       `,
-      text: `AsaliMart password reset link: ${resetUrl} (15 minute ke liye valid)`,
-    };
+    });
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`📧 Password reset email sent to ${email}: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
+    if (error) {
+      console.error("❌ Resend error:", error.message);
+      return { success: false, message: error.message };
+    }
+
+    console.log(`📧 Password reset email sent to ${email}: ${data.id}`);
+    return { success: true, messageId: data.id };
   } catch (error) {
     console.error("❌ Password reset email failed:", error.message);
     return { success: false, message: error.message };
